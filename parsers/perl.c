@@ -16,7 +16,7 @@
 #include <string.h>
 
 #include "entry.h"
-#include "perl.h"
+#include "x-perl.h"
 #include "promise.h"
 #include "read.h"
 #include "routines.h"
@@ -625,9 +625,10 @@ static bool isInHereDoc (struct hereDocMarkerManager *mgr,
 		&& (cp [vStringLength (current->marker)] == '\0'
 			|| (!isIdentifier (cp [vStringLength (current->marker)]))))
 	{
-		tagEntryInfo *tag = getEntryInCorkQueue (current->corkIndex);
-		if (tag)
-			tag->extensionFields.endLine = getInputLineNumber();
+		setTagEndLineToCorkEntry (current->corkIndex, getInputLineNumber());
+
+		makeSimpleRefTag (current->marker, KIND_PERL_HEREDOCMARKER, R_HEREDOC_ENDLABEL);
+
 		mgr->current++;
 		if (mgr->current == ptrArrayCount (mgr->markers))
 		{

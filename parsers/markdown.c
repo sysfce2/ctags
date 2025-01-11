@@ -34,7 +34,7 @@
 #include "promise.h"
 #include "htable.h"
 
-#include "markdown.h"
+#include "x-markdown.h"
 
 /*
  *   DATA DEFINITIONS
@@ -116,12 +116,11 @@ static int makeMarkdownTag (const vString* const name, const int kind, const boo
 		if (twoLine)
 		{
 			/* we want the line before the '---' underline chars */
-			const unsigned long line = getInputLineNumber ();
-			Assert (line > 0);
-			if (line > 0)
+			Assert (e.lineNumber > 1);
+			if (e.lineNumber > 1)
 			{
-				e.lineNumber--;
-				e.filePosition = getInputFilePositionForLine (line - 1);
+				unsigned long lineNumber = e.lineNumber - 1;
+				updateTagLine (&e, lineNumber, getInputFilePositionForLine (lineNumber));
 			}
 		}
 
@@ -189,7 +188,7 @@ static void fillEndField (NestingLevel *nl, void *ctxData)
 	if (e)
 	{
 		unsigned long line = (unsigned long)(HT_PTR_TO_UINT (ctxData));
-		e->extensionFields.endLine = line;
+		setTagEndLine (e, line);
 	}
 }
 
@@ -377,7 +376,11 @@ static void findMarkdownTags (void)
 
 		if (lineNum == 1 || inPreambule)
 		{
-			if (line[pos] == '-' && line[pos + 1] == '-' && line[pos + 2] == '-')
+			if ((line[pos] == '-' && line[pos + 1] == '-' && line[pos + 2] == '-')
+				|| ( /* Yaml uses "..." as the end of a document.
+					  * See https://yaml.org/spec/1.2.2/#22-structures */
+					inPreambule &&
+					(line[pos] == '.' && line[pos + 1] == '.' && line[pos + 2] == '.')))
 			{
 				if (inPreambule)
 				{

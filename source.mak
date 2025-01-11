@@ -11,9 +11,6 @@ REPOINFO_HEADS = main/repoinfo.h
 REPOINFO_SRCS  = main/repoinfo.c
 REPOINFO_OBJS  = $(REPOINFO_SRCS:.c=.$(OBJEXT))
 
-MIO_HEADS = main/mio.h
-MIO_SRCS  = main/mio.c
-
 UTIL_PUBLIC_HEADS = \
 	main/general.h		\
 	\
@@ -21,9 +18,12 @@ UTIL_PUBLIC_HEADS = \
 	main/gcc-attr.h		\
 	main/htable.h		\
 	main/inline.h		\
+	main/intern.h		\
+	main/mio.h		\
 	main/numarray.h		\
 	main/ptrarray.h		\
 	main/routines.h		\
+	main/sort_r.h		\
 	main/trashbox.h 	\
 	main/vstring.h		\
 	\
@@ -43,7 +43,9 @@ UTIL_HEADS = \
 UTIL_SRCS = \
 	main/fname.c		\
 	main/htable.c		\
+	main/intern.c		\
 	main/numarray.c		\
+	main/mio.c		\
 	main/ptrarray.c		\
 	main/routines.c		\
 	main/trashbox.c		\
@@ -55,14 +57,10 @@ UTIL_OBJS = $(UTIL_SRCS:.c=.$(OBJEXT))
 UTILTEST_HEADS = \
 	extra-cmds/acutest.h \
 	\
-	$(MIO_HEADS) \
-	\
 	$(NULL)
 UTILTEST_SRCS  = \
 	extra-cmds/utiltest.c \
 	extra-cmds/readtags-stub.c \
-	\
-	$(MIO_SRCS) \
 	\
 	$(NULL)
 UTILTEST_OBJS = $(UTILTEST_SRCS:.c=.$(OBJEXT))
@@ -74,6 +72,7 @@ MAIN_PUBLIC_HEADS =		\
 	main/entry.h		\
 	main/field.h		\
 	main/gvars.h		\
+	main/interval_tree_generic.h \
 	main/keyword.h		\
 	main/kind.h		\
 	main/lregex.h		\
@@ -86,6 +85,7 @@ MAIN_PUBLIC_HEADS =		\
 	main/parse.h		\
 	main/promise.h		\
 	main/rbtree.h		\
+	main/rbtree_augmented.h	\
 	main/read.h		\
 	main/selectors.h	\
 	main/strlist.h		\
@@ -141,8 +141,6 @@ LIB_HEADS =			\
 	$(MAIN_PUBLIC_HEADS)	\
 	$(LIB_PRIVATE_HEADS)	\
 	\
-	$(MIO_HEADS)		\
-	\
 	$(NULL)
 
 LIB_SRCS =			\
@@ -194,7 +192,6 @@ LIB_SRCS =			\
 	$(TXT2CSTR_SRCS) \
 	\
 	$(REPOINFO_SRCS) \
-	$(MIO_SRCS)      \
 	\
 	$(NULL)
 
@@ -241,10 +238,12 @@ OPTLIB2C_INPUT = \
 	optlib/mesonOptions.ctags		\
 	optlib/org.ctags			\
 	optlib/passwd.ctags			\
+	optlib/pkgConfig.ctags			\
 	optlib/pod.ctags			\
 	optlib/puppetManifest.ctags		\
 	optlib/qemuhx.ctags			\
 	optlib/rpmMacros.ctags			\
+	optlib/selinux-type-enforcement.ctags	\
 	optlib/scss.ctags			\
 	optlib/systemtap.ctags			\
 	optlib/terraform.ctags			\
@@ -265,6 +264,7 @@ PEG_INPUT = \
        peg/kotlin.peg				\
        peg/thrift.peg				\
        peg/elm.peg					\
+       peg/toml.peg				\
        \
        $(NULL)
 PEG_SRCS = $(PEG_INPUT:.peg=.c)
@@ -272,33 +272,39 @@ PEG_HEADS = $(PEG_INPUT:.peg=.h)
 PEG_EXTRA_HEADS = peg/peg_common.h $(PEG_INPUT:.peg=_pre.h) $(PEG_INPUT:.peg=_post.h)
 PEG_OBJS = $(PEG_SRCS:.c=.$(OBJEXT))
 
+PEGO_INTERMEDIATE = $(PEG_INPUT:.peg=.pego)
+
 PARSER_HEADS = \
-	parsers/autoconf.h \
-	parsers/cpreprocessor.h \
+	parsers/x-autoconf.h \
+	parsers/x-cpreprocessor.h \
 	\
 	parsers/cxx/cxx_debug.h \
 	parsers/cxx/cxx_keyword.h \
 	parsers/cxx/cxx_parser_internal.h \
 	parsers/cxx/cxx_parser.h \
 	parsers/cxx/cxx_scope.h \
+	parsers/cxx/cxx_side_chain.h \
 	parsers/cxx/cxx_subparser.h \
 	parsers/cxx/cxx_subparser_internal.h \
 	parsers/cxx/cxx_tag.h \
 	parsers/cxx/cxx_token.h \
 	parsers/cxx/cxx_token_chain.h \
 	\
-	parsers/bibtex.h \
-	parsers/frontmatter.h \
-	parsers/iniconf.h \
-	parsers/m4.h \
-	parsers/make.h \
-	parsers/markdown.h \
-	parsers/perl.h \
-	parsers/r.h \
-	parsers/ruby.h \
-	parsers/sh.h \
-	parsers/tcl.h \
-	parsers/tex.h \
+	parsers/x-bibtex.h \
+	parsers/x-frontmatter.h \
+	parsers/x-iniconf.h \
+	parsers/x-jscript.h \
+	parsers/x-lisp.h \
+	parsers/x-m4.h \
+	parsers/x-make.h \
+	parsers/x-markdown.h \
+	parsers/x-perl.h \
+	parsers/x-r.h \
+	parsers/x-ruby.h \
+	parsers/x-sh.h \
+	parsers/x-tcl.h \
+	parsers/x-toml.h \
+	parsers/x-tex.h \
 	\
 	$(NULL)
 
@@ -332,6 +338,7 @@ PARSER_SRCS =				\
 	parsers/cxx/cxx_parser_block.c		\
 	parsers/cxx/cxx_parser_function.c	\
 	parsers/cxx/cxx_parser_lambda.c		\
+	parsers/cxx/cxx_parser_module.c		\
 	parsers/cxx/cxx_parser_namespace.c	\
 	parsers/cxx/cxx_parser_template.c	\
 	parsers/cxx/cxx_parser_tokenizer.c	\
@@ -340,6 +347,7 @@ PARSER_SRCS =				\
 	parsers/cxx/cxx_parser_variable.c	\
 	parsers/cxx/cxx_qtmoc.c		\
 	parsers/cxx/cxx_scope.c		\
+	parsers/cxx/cxx_side_chain.c	\
 	parsers/cxx/cxx_subparser.c	\
 	parsers/cxx/cxx_tag.c		\
 	parsers/cxx/cxx_token.c		\
@@ -402,6 +410,7 @@ PARSER_SRCS =				\
 	parsers/ruby.c			\
 	parsers/rust.c			\
 	parsers/scheme.c		\
+	parsers/selinux-interface.c	\
 	parsers/sh.c			\
 	parsers/slang.c			\
 	parsers/sml.c			\
@@ -411,9 +420,11 @@ PARSER_SRCS =				\
 	parsers/tcloo.c			\
 	parsers/tex.c			\
 	parsers/tex-beamer.c		\
+	parsers/cargo.c			\
 	parsers/ttcn.c			\
 	parsers/txt2tags.c		\
 	parsers/typescript.c		\
+	parsers/v.c			\
 	parsers/vera.c			\
 	parsers/verilog.c		\
 	parsers/vhdl.c			\
@@ -425,7 +436,7 @@ PARSER_SRCS =				\
 	\
 	$(NULL)
 
-XML_HEADS = parsers/xml.h
+XML_HEADS = parsers/x-xml.h
 XML_SRCS = \
 	parsers/maven2.c		\
 	parsers/dbusintrospect.c	\
@@ -434,11 +445,12 @@ XML_SRCS = \
 	parsers/plist.c			\
 	parsers/relaxng.c		\
 	parsers/xml.c			\
+	parsers/xrc.c			\
 	parsers/xslt.c			\
 	\
 	$(NULL)
 
-YAML_HEADS = parsers/yaml.h
+YAML_HEADS = parsers/x-yaml.h
 YAML_SRCS = \
 	parsers/yaml.c		\
 	\
@@ -447,6 +459,8 @@ YAML_SRCS = \
 	parsers/ansibleplaybook.c	\
 	\
 	parsers/yamlfrontmatter.c	\
+	\
+	parsers/i18nrubygem.c	\
 	\
 	$(NULL)
 
@@ -476,8 +490,6 @@ READTAGS_DSL_HEADS = \
 	dsl/qualifier.h \
 	dsl/sorter.h \
 	\
-	$(MIO_HEADS) \
-	\
 	$(NULL)
 
 READTAGS_DSL_SRCS = \
@@ -486,8 +498,6 @@ READTAGS_DSL_SRCS = \
 	dsl/formatter.c \
 	dsl/qualifier.c \
 	dsl/sorter.c \
-	\
-	$(MIO_SRCS) \
 	\
 	$(NULL)
 READTAGS_DSL_OBJS = $(READTAGS_DSL_SRCS:.c=.$(OBJEXT))

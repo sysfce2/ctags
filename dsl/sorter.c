@@ -89,11 +89,12 @@ static DSLProcBind pbinds [] = {
 	  .helpstr = "(<> <any:a> <any:b>) -> -1|0|1; compare a b. The types of a and b must be the same." },
 	{ "*-",              sorter_proc_flip,         NULL, DSL_PATTR_CHECK_ARITY,     1,
 	  .helpstr = "(*- <interger:n>) -> -<integer:n>; filp the result of comparison." },
-	{ "<or>",            sorter_sform_cmp_or,      NULL, DSL_PATTR_CHECK_ARITY_OPT, 1,
-	  .helpstr = "(<or> <any> ...) -> -1|0|1; evaluate arguments left to right till one of thme returns -1 or 1." },
+	{ "<or>",            sorter_sform_cmp_or,      NULL, DSL_PATTR_SELF_EVAL|DSL_PATTR_CHECK_ARITY_OPT, 1,
+	  .helpstr = "(<or> <any> ...) -> -1|0|1; evaluate arguments left to right till one of them returns -1 or 1." },
 
-	{ "&",               sorter_alt_entry_ref, NULL, DSL_PATTR_CHECK_ARITY,  1,
-	  .helpstr = "(& <string:field>) -> #f|<string>" },
+	{ "&",               sorter_alt_entry_ref, NULL, DSL_PATTR_CHECK_ARITY_OPT,  1,
+	  .helpstr = "(& <string:field>) -> <string>|#f\n"
+	  "(& <string:field> <any:default>) -> <string>|<any:default>"},
 	{ "&name",           alt_value_name,           NULL, DSL_PATTR_MEMORABLE, 0UL,
 	  .helpstr = "-> <string>"},
 	{ "&input",          alt_value_input,          NULL, DSL_PATTR_MEMORABLE, 0UL,
@@ -211,7 +212,17 @@ static EsObject* sorter_alt_entry_ref (EsObject *args, DSLEnv *env)
 		dsl_throw (WRONG_TYPE_ARGUMENT,
 				   es_symbol_intern ("&"));
 	else
-		return dsl_entry_xget_string (env->alt_entry, es_string_get (key));
+	{
+		EsObject *r = dsl_entry_xget_string (env->alt_entry, es_string_get (key));
+		if (es_object_equal (r, es_false))
+		{
+			EsObject *defaultv = es_car(es_cdr(args));
+			if (es_null (defaultv))
+				return r;
+			return defaultv;
+		}
+		return r;
+	}
 }
 
 static EsObject* sorter_proc_cmp (EsObject* args, DSLEnv *env)

@@ -261,7 +261,8 @@ static void scanString (lexerState *lexer)
 			advanceAndStoreChar(lexer);
 		advanceAndStoreChar(lexer);
 	}
-	advanceAndStoreChar(lexer);
+	if (lexer->cur_c != EOF)
+		advanceAndStoreChar(lexer);
 }
 
 /* Raw strings look like this: r"" or r##""## where the number of
@@ -441,8 +442,7 @@ static void addTag (vString* ident, const char* arg_list, int kind, unsigned lon
 	tagEntryInfo tag;
 	initTagEntry(&tag, vStringValue(ident), kind);
 
-	tag.lineNumber = line;
-	tag.filePosition = pos;
+	updateTagLine (&tag, line, pos);
 
 	tag.extensionFields.signature = arg_list;
 	/*tag.extensionFields.varType = type;*/ /* FIXME: map to typeRef[1]? */

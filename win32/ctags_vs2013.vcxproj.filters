@@ -108,6 +108,9 @@
     <ClCompile Include="..\main\htable.c">
       <Filter>Source Files\main</Filter>
     </ClCompile>
+    <ClCompile Include="..\main\intern.c">
+      <Filter>Source Files\main</Filter>
+    </ClCompile>
     <ClCompile Include="..\main\keyword.c">
       <Filter>Source Files\main</Filter>
     </ClCompile>
@@ -264,6 +267,9 @@
     <ClCompile Include="..\optlib\passwd.c">
       <Filter>Source Files\optlib</Filter>
     </ClCompile>
+    <ClCompile Include="..\optlib\pkgConfig.c">
+      <Filter>Source Files\optlib</Filter>
+    </ClCompile>
     <ClCompile Include="..\optlib\pod.c">
       <Filter>Source Files\optlib</Filter>
     </ClCompile>
@@ -277,6 +283,9 @@
       <Filter>Source Files\optlib</Filter>
     </ClCompile>
     <ClCompile Include="..\optlib\scss.c">
+      <Filter>Source Files\optlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\optlib\selinux-type-enforcement.c">
       <Filter>Source Files\optlib</Filter>
     </ClCompile>
     <ClCompile Include="..\optlib\systemtap.c">
@@ -342,6 +351,9 @@
     <ClCompile Include="..\parsers\c-based.c">
       <Filter>Source Files\parsers</Filter>
     </ClCompile>
+    <ClCompile Include="..\parsers\cargo.c">
+      <Filter>Source Files\parsers</Filter>
+    </ClCompile>
     <ClCompile Include="..\parsers\clojure.c">
       <Filter>Source Files\parsers</Filter>
     </ClCompile>
@@ -378,6 +390,9 @@
     <ClCompile Include="..\parsers\cxx\cxx_parser_lambda.c">
       <Filter>Source Files\parsers\cxx</Filter>
     </ClCompile>
+    <ClCompile Include="..\parsers\cxx\cxx_parser_module.c">
+      <Filter>Source Files\parsers\cxx</Filter>
+    </ClCompile>
     <ClCompile Include="..\parsers\cxx\cxx_parser_namespace.c">
       <Filter>Source Files\parsers\cxx</Filter>
     </ClCompile>
@@ -400,6 +415,9 @@
       <Filter>Source Files\parsers\cxx</Filter>
     </ClCompile>
     <ClCompile Include="..\parsers\cxx\cxx_scope.c">
+      <Filter>Source Files\parsers\cxx</Filter>
+    </ClCompile>
+    <ClCompile Include="..\parsers\cxx\cxx_side_chain.c">
       <Filter>Source Files\parsers\cxx</Filter>
     </ClCompile>
     <ClCompile Include="..\parsers\cxx\cxx_subparser.c">
@@ -588,6 +606,9 @@
     <ClCompile Include="..\parsers\scheme.c">
       <Filter>Source Files\parsers</Filter>
     </ClCompile>
+    <ClCompile Include="..\parsers\selinux-interface.c">
+      <Filter>Source Files\parsers</Filter>
+    </ClCompile>
     <ClCompile Include="..\parsers\sh.c">
       <Filter>Source Files\parsers</Filter>
     </ClCompile>
@@ -622,6 +643,9 @@
       <Filter>Source Files\parsers</Filter>
     </ClCompile>
     <ClCompile Include="..\parsers\typescript.c">
+      <Filter>Source Files\parsers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\parsers\v.c">
       <Filter>Source Files\parsers</Filter>
     </ClCompile>
     <ClCompile Include="..\parsers\vera.c">
@@ -719,6 +743,12 @@
     <ClInclude Include="..\main\inline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\main\intern.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\main\interval_tree_generic.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\main\keyword.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -797,6 +827,9 @@
     <ClInclude Include="..\main\rbtree.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\main\rbtree_augmented.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\main\read.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -816,6 +849,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\main\sort_p.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\main\sort_r.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\main\stats_p.h">
@@ -860,15 +896,6 @@
     <ClInclude Include="..\main\xtag_p.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\autoconf.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\parsers\bibtex.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\parsers\cpreprocessor.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\parsers\cxx\cxx_debug.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -882,6 +909,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\parsers\cxx\cxx_scope.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\parsers\cxx\cxx_side_chain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\parsers\cxx\cxx_subparser.h">
@@ -899,37 +929,55 @@
     <ClInclude Include="..\parsers\cxx\cxx_token_chain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\frontmatter.h">
+    <ClInclude Include="..\parsers\x-autoconf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\iniconf.h">
+    <ClInclude Include="..\parsers\x-bibtex.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\m4.h">
+    <ClInclude Include="..\parsers\x-cpreprocessor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\make.h">
+    <ClInclude Include="..\parsers\x-frontmatter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\markdown.h">
+    <ClInclude Include="..\parsers\x-iniconf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\perl.h">
+    <ClInclude Include="..\parsers\x-jscript.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\r.h">
+    <ClInclude Include="..\parsers\x-lisp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\ruby.h">
+    <ClInclude Include="..\parsers\x-m4.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\sh.h">
+    <ClInclude Include="..\parsers\x-make.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\tcl.h">
+    <ClInclude Include="..\parsers\x-markdown.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\parsers\tex.h">
+    <ClInclude Include="..\parsers\x-perl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\parsers\x-r.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\parsers\x-ruby.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\parsers\x-sh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\parsers\x-tcl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\parsers\x-tex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\parsers\x-toml.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">

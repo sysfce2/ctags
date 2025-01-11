@@ -16,7 +16,7 @@
 */
 #include "general.h"	/* must always come first */
 
-#include "frontmatter.h"
+#include "x-frontmatter.h"
 
 #include "entry.h"
 #include "parse.h"
@@ -46,9 +46,9 @@ static void findFrontMatterTags (void)
 	if (strcmp("---", (const char *)line) == 0)
 	{
 		line = readLineFromInputFile ();
-		unsigned long endOffset = strlen((const char *)line);
 		if (line)
 		{
+			unsigned long endOffset = strlen((const char *)line);
 			long startLineNum = getInputLineNumber ();
 			while ((line = readLineFromInputFile()))
 				endOffset = strlen((const char *)line);

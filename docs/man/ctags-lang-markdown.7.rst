@@ -6,7 +6,7 @@ ctags-lang-markdown
 
 Random notes about tagging Markdown source code with Universal Ctags
 
-:Version: 6.0.0
+:Version: 6.1.0
 :Manual group: Universal Ctags
 :Manual section: 7
 
@@ -18,7 +18,7 @@ SYNOPSIS
 
 DESCRIPTION
 -----------
-This man page gathers random notes about tagging Markdown documents.
+This man page gathers random notes about tagging Markdown documents [XSYNTAX]_.
 
 VERSIONS
 --------

@@ -22,13 +22,14 @@
 #include "subparser.h"
 #include "trace.h"
 #include "types.h"
-#include "yaml.h"
+#include "x-yaml.h"
 
 #include "numarray.h"
 #include "keyword.h"
 #include "trashbox.h"
 
 
+#ifdef DEBUG
 #define entry(X) [X] = #X
 static const char *tokenTypeName [] = {
     entry (YAML_NO_TOKEN),
@@ -54,6 +55,8 @@ static const char *tokenTypeName [] = {
     entry (YAML_TAG_TOKEN),
     entry (YAML_SCALAR_TOKEN),
 };
+#undef entry
+#endif
 
 static void yamlInit (yaml_parser_t *yaml)
 {
@@ -78,12 +81,9 @@ extern void attachYamlPosition (tagEntryInfo *tag, yaml_token_t *token, bool asE
 	unsigned int ln = token->start_mark.line + 1;
 
 	if (asEndPosition)
-		tag->extensionFields.endLine = ln;
+		setTagEndLine (tag, ln);
 	else
-	{
-		tag->lineNumber = ln;
-		tag->filePosition = getInputFilePositionForLine (tag->lineNumber);
-	}
+		updateTagLine (tag, ln, getInputFilePositionForLine (ln));
 }
 
 enum YamlKind {
@@ -431,7 +431,10 @@ static bool ypathStateStackMatch (struct ypathTypeStack *stack,
 	if (stack == NULL)
 		return false;
 
-	if (stack->key == intArrayItem (code, offset))
+	int expected_key = intArrayItem (code, offset);
+
+	/* KEYWORD_NONE represents '*'. */
+	if (expected_key == KEYWORD_NONE || stack->key == expected_key)
 		return ypathStateStackMatch (stack->next, code, offset + 1);
 	else
 		return false;
@@ -453,7 +456,7 @@ static void ypathHandleToken (yamlSubparser *yaml, yaml_token_t *token, int stat
 			tagEntryInfo tag;
 			bool r = true;
 			if (tables[i].initTagEntry)
-				r = (* tables[i].initTagEntry) (&tag, (char *)token->data.scalar.value,
+				r = (* tables[i].initTagEntry) (&tag, yaml, (char *)token->data.scalar.value,
 												tables[i].data);
 			else
 				initTagEntry (&tag, (char *)token->data.scalar.value, tables[i].kind);

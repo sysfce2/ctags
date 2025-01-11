@@ -71,25 +71,63 @@ extern parserDefinition* KconfigParser (void)
 	static tagRegexTable KconfigTagRegexTable [] = {
 		{"^[ \t]*#.*$", "",
 		"", "{placeholder}", NULL, false},
-		{"^[ \t]*(menu)?config[ \t]+([A-Za-z0-9_]+)[ \t]*$", "\\2",
-		"c", "{scope=ref}", NULL, false},
-		{"^[ \t]*(menu)?config[ \t]+([A-Za-z0-9_]+)[ \t]*$", "CONFIG_\\2",
+		{"^[ \t]*(menu)?config[ \t]+([A-Za-z0-9_]+)[ \t]*(#.*)?$", "\\2",
+		"c", "{scope=ref}"
+		"{{\n"
+		"   .\n"
+		"}}", NULL, false},
+		{"^[ \t]*(def_)?(bool|boolean|hex|int|string|tristate)\\>", "",
+		"", "{exclusive}"
+		"{{\n"
+		"   count 0 gt {\n"
+		"         \\2 typeref:\n"
+		"         clear\n"
+		"   } if\n"
+		"}}", NULL, false},
+		{"^[ \t]*(menu)?config[ \t]+([A-Za-z0-9_]+)[ \t]*(#.*)?$", "CONFIG_\\2",
 		"c", "{scope=ref}{_extra=configPrefixed}", NULL, false},
-		{"^[ \t]*(menu)?config[ \t]+([A-Za-z0-9_]+)[ \t]*$", "CONFIG_\\2_MODULE",
+		{"^[ \t]*(menu)?config[ \t]+([A-Za-z0-9_]+)[ \t]*(#.*)?$", "CONFIG_\\2_MODULE",
 		"c", "{scope=ref}{_extra=configPrefixed}{exclusive}", NULL, false},
-		{"^[ \t]*menu[ \t]+\"([^\"]+)\"[ \t]*", "\\1",
+		{"^[ \t]*menu[ \t]+\"([^\"]+)\"[ \t]*(#.*)?$", "\\1",
 		"m", "{scope=push}{exclusive}", NULL, false},
-		{"^[ \t]*endmenu[ \t]*", "",
+		{"^[ \t]*endmenu[ \t]*(#.*)?$", "",
 		"", "{scope=pop}{placeholder}{exclusive}", NULL, false},
-		{"^[ \t]*source[ \t]+\"?([^\"]+)\"?[ \t]*", "\\1",
+		{"^[ \t]*source[ \t]+\"?([^\"]+)\"?[ \t]*(#.*)?$", "\\1",
 		"k", "{_role=source}{exclusive}{scope=ref}", NULL, false},
-		{"^[ \t]*choice[ \t]+([A-Za-z0-9_]+)[ \t]*", "\\1",
+		{"^[ \t]*choice[ \t]+([A-Za-z0-9_]+)[ \t]*(#.*)?$", "\\1",
 		"C", "{scope=push}{exclusive}", NULL, false},
-		{"^[ \t]*choice[ \t]*$", "",
+		{"^[ \t]*choice[ \t]*(#.*)?$", "",
 		"C", "{_anonymous=choice}{scope=push}{exclusive}", NULL, false},
-		{"^[ \t]*endchoice[ \t]*", "",
+		{"^[ \t]*prompt[ \t]+\"([^\"]+)\"[ \t]*(#.*|if)?", "",
+		"", "{exclusive}"
+		"{{\n"
+		"   _scopetop {\n"
+		"      dup :kind /choice eq {\n"
+		"         dup :extras {\n"
+		"            /anonymous _amember {\n"
+		"               % This is an anonymous tag that kind is choice.\n"
+		"               % Throw it away.\n"
+		"               _markplaceholder\n"
+		"               _scopepop\n"
+		"               % Make a new one with the prompt.\n"
+		"               \\1 /choice @1 _tag _commit _scopepush\n"
+		"            } {\n"
+		"               % This is not an anonymous tag.\n"
+		"               pop\n"
+		"            } ifelse\n"
+		"         } {\n"
+		"            % This is not an extra tag.\n"
+		"            pop\n"
+		"         } ifelse\n"
+		"       } {\n"
+		"          % This is not a choice.\n"
+		"          pop\n"
+		"       } ifelse\n"
+		"   } if\n"
+		"}}", NULL, false},
+		{"^[ \t]*endchoice[ \t]*(#.*)?$", "",
 		"", "{scope=pop}{placeholder}{exclusive}", NULL, false},
-		{"^[ \t]*mainmenu[ \t]+\"([^\"]+)\"[ \t]*", "\\1",
+		{"^[ \t]*mainmenu[ \t]+\"([^\"]+)\"[ \t]*(#.*)?$", "\\1",
 		"M", "{exclusive}", NULL, false},
 		{"^([-a-zA-Z0-9_$]+)[ \t]*:?=", "\\1",
 		"v", "{exclusive}", NULL, false},

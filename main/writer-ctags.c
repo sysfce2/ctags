@@ -38,15 +38,16 @@ static int writeCtagsPtagEntry (tagWriter *writer CTAGS_ATTR_UNUSED,
 static bool treatFieldAsFixed (int fieldType);
 static void checkCtagsOptions (tagWriter *writer, bool fieldsWereReset);
 
-#ifdef WIN32
+#ifdef _WIN32
 static enum filenameSepOp overrideFilenameSeparator (enum filenameSepOp currentSetting);
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 
 struct rejection {
 	bool rejectionInThisInput;
 };
 
 tagWriter uCtagsWriter = {
+	.oformat = "u-ctags",
 	.writeEntry = writeCtagsEntry,
 	.writePtagEntry = writeCtagsPtagEntry,
 	.printPtagByDefault = true,
@@ -55,7 +56,8 @@ tagWriter uCtagsWriter = {
 	.rescanFailedEntry = NULL,
 	.treatFieldAsFixed = treatFieldAsFixed,
 	.checkOptions = checkCtagsOptions,
-#ifdef WIN32
+	.canPrintNullTag = false,
+#ifdef _WIN32
 	.overrideFilenameSeparator = overrideFilenameSeparator,
 #endif
 	.defaultFileName = CTAGS_FILE,
@@ -78,7 +80,7 @@ static bool endECTagsFile (tagWriter *writer, MIO * mio CTAGS_ATTR_UNUSED, const
 	return rej->rejectionInThisInput;
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 static enum filenameSepOp overrideFilenameSeparator (enum filenameSepOp currentSetting)
 {
 	if (currentSetting == FILENAME_SEP_UNSET)
@@ -88,6 +90,7 @@ static enum filenameSepOp overrideFilenameSeparator (enum filenameSepOp currentS
 #endif
 
 tagWriter eCtagsWriter = {
+	.oformat = "e-ctags",
 	.writeEntry = writeCtagsEntry,
 	.writePtagEntry = writeCtagsPtagEntry,
 	.printPtagByDefault = true,
@@ -95,8 +98,9 @@ tagWriter eCtagsWriter = {
 	.postWriteEntry = endECTagsFile,
 	.rescanFailedEntry = NULL,
 	.treatFieldAsFixed = treatFieldAsFixed,
-	.defaultFileName = CTAGS_FILE,
 	.checkOptions = checkCtagsOptions,
+	.canPrintNullTag = false,
+	.defaultFileName = CTAGS_FILE,
 };
 
 static bool hasTagEntryTabOrNewlineChar (const tagEntryInfo * const tag)
@@ -209,9 +213,14 @@ static int addParserFields (tagWriter *writer, MIO * mio, const tagEntryInfo *co
 		if (! isFieldEnabled (ftype))
 			continue;
 
+		unsigned int dt = getFieldDataType (ftype);
+		const char *val = ((dt & FIELDTYPE_STRING) == 0
+							&& (dt & FIELDTYPE_BOOL))
+			? ""
+			: escapeFieldValueFull (writer, tag, ftype, i);
+
 		length += mio_printf(mio, "\t%s:%s",
-							 getFieldName (ftype),
-							 escapeFieldValueFull (writer, tag, ftype, i));
+							 getFieldName (ftype), val);
 	}
 	return length;
 }
@@ -398,7 +407,7 @@ static int writeCtagsPtagEntry (tagWriter *writer,
 
 	vString *vfileName = vStringNew ();
 	if (writer->type == WRITER_U_CTAGS
-#ifdef WIN32
+#ifdef _WIN32
 		&& getFilenameSeparator(Option.useSlashAsFilenameSeparator) == FILENAME_SEP_USE_SLASH
 #endif
 		)

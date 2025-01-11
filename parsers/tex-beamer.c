@@ -20,7 +20,7 @@
 #include "kind.h"
 #include "parse.h"
 #include "read.h"
-#include "tex.h"
+#include "x-tex.h"
 
 #include <string.h>
 
@@ -216,9 +216,7 @@ static bool readEnviromentEndNotify (texSubparser *s,
 	if (strcmp (vStringValue (env), "frame") == 0)
 	{
 		struct beamerSubparser *b = (struct beamerSubparser *)s;
-		tagEntryInfo *e = getEntryInCorkQueue (b->lastTitleCorkIndex);
-		if (e)
-			e->extensionFields.endLine = getInputLineNumber ();
+		setTagEndLineToCorkEntry (b->lastTitleCorkIndex, getInputLineNumber ());
 		return true;
 	}
 	return false;

@@ -622,8 +622,7 @@ static void makeSqlTag (tokenInfo *const token, const sqlKind kind)
 		tagEntryInfo e;
 		initTagEntry (&e, name, kind);
 
-		e.lineNumber   = token->lineNumber;
-		e.filePosition = token->filePosition;
+		updateTagLine (&e, token->lineNumber, token->filePosition);
 
 		if (vStringLength (token->scope) > 0)
 		{
@@ -1076,11 +1075,7 @@ static void readIdentifier (tokenInfo *const token)
 
 static void addToScope (tokenInfo* const token, vString* const extra, sqlKind kind)
 {
-	if (vStringLength (token->scope) > 0)
-	{
-		vStringPut (token->scope, '.');
-	}
-	vStringCat (token->scope, extra);
+	vStringJoin (token->scope, '.', extra);
 	token->scopeKind = kind;
 }
 

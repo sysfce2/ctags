@@ -16,7 +16,7 @@
  *   INCLUDE FILES
  */
 #include "general.h"	/* must always come first */
-#include "markdown.h"
+#include "x-markdown.h"
 
 #include "entry.h"
 #include "parse.h"
@@ -179,9 +179,7 @@ static void notifyEndOfCodeBlock (markdownSubparser *s)
 	if (quarto->lastChunkLabel == CORK_NIL)
 		return;
 
-	tagEntryInfo *e = getEntryInCorkQueue (quarto->lastChunkLabel);
-	if (e)
-		e->extensionFields.endLine = getInputLineNumber ();
+	setTagEndLineToCorkEntry (quarto->lastChunkLabel, getInputLineNumber ());
 
 	quarto->lastChunkLabel = CORK_NIL;
 }

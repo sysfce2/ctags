@@ -80,6 +80,7 @@ static void basePopKind (struct parserBaseCtx *auxil, bool popScopeToo)
     }
 }
 
+CTAGS_ATTR_UNUSED
 static int basePeekKind (struct parserBaseCtx *auxil)
 {
     return intArrayLast (auxil->kind_stack);
@@ -115,7 +116,7 @@ static void baseFini(struct parserBaseCtx *auxil)
 }
 
 #ifdef DEBUG
-static void baseAddDebugRule (struct parserBaseCtx *auxil, char *rule)
+CTAGS_ATTR_UNUSED static void baseAddDebugRule (struct parserBaseCtx *auxil, char *rule)
 {
 	hashTablePutItem (auxil->debug_rules, rule, HT_INT_TO_PTR(1));
 }

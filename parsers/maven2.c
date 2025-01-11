@@ -18,7 +18,7 @@
 #include "read.h"
 #include "routines.h"
 #include "selectors.h"
-#include "xml.h"
+#include "x-xml.h"
 
 #include <string.h>
 
@@ -78,8 +78,9 @@ static void makeTagForProperties (xmlNode *node,
 
 	str = node->name;
 	initTagEntry (&tag, (char *)str, K_PROPERTY);
-	tag.lineNumber = xmlGetLineNo (node);
-	tag.filePosition = getInputFilePositionForLine (tag.lineNumber);
+
+	unsigned long lineNumber = xmlGetLineNo (node);
+	updateTagLine (&tag, lineNumber, getInputFilePositionForLine (lineNumber));
 
 	makeTagEntry (&tag);
 }

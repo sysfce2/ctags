@@ -10,17 +10,7 @@ READTAGS=$3
 #V="valgrind --leak-check=full -v"
 V=
 
-if ! [ -x "${READTAGS}" ]; then
-    skip "no readtags"
-fi
-
-if ! ( "${READTAGS}" -h | grep -q -e -Q ); then
-    skip "no qualifier function in readtags"
-fi
-
-if ! ( "${READTAGS}" -h | grep -q -e -F ); then
-    skip "no formatter function in readtags"
-fi
+skip_if_no_readtags "$READTAGS"
 
 echo '# FQ' &&
 	${V} ${READTAGS} -t output.tags -Q '(eq? $kind "function")' --formatter '(list $name #t)' -l &&

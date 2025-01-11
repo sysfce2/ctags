@@ -20,6 +20,7 @@
 	PlistXMLParser, \
 	RelaxNGParser, \
 	SvgParser, \
+	XrcParser, \
 	XmlParser, \
 	XsltParser
 #else
@@ -30,6 +31,7 @@
 #define YAML_PARSER_LIST						\
 	YamlParser,									\
 	AnsiblePlaybookParser, \
+	I18nRubyGemParser, \
 	OpenAPIParser, \
 	YamlFrontMatter
 #else
@@ -41,14 +43,15 @@
 	VarlinkParser, \
 	KotlinParser,  \
 	ThriftParser,  \
-	ElmParser
+	ElmParser,     \
+	TomlParser
 #else
 #define PEG_PARSER_LIST
 #endif
 
 #ifdef HAVE_PCRE2
-#define OPTLIB2C_PCRE2_PARSER_LIST             \
-   RDocParser
+#define OPTLIB2C_PCRE2_PARSER_LIST			\
+	RDocParser
 #else
 #define OPTLIB2C_PCRE2_PARSER_LIST
 #endif
@@ -74,6 +77,7 @@
 	ClojureParser, \
 	CMakeParser, \
 	CParser, \
+	CargoParser, \
 	CppParser, \
 	CPreProParser, \
 	CssParser, \
@@ -140,6 +144,7 @@
 	PerlParser, \
 	Perl6Parser, \
 	PhpParser, \
+	PkgConfigParser, \
 	PodParser, \
 	PowerShellParser, \
 	ProtobufParser, \
@@ -165,6 +170,8 @@
 	S4ClassParser, \
 	SchemeParser, \
 	SCSSParser, \
+	SELinuxInterfaceParser, \
+	SELinuxTypeEnforcementParser, \
 	ShParser, \
 	SlangParser, \
 	SmlParser, \
@@ -180,6 +187,7 @@
 	TTCNParser, \
 	Txt2tagsParser, \
 	TypeScriptParser, \
+	VParser, \
 	VeraParser, \
 	VerilogParser, \
 	SystemVerilogParser, \

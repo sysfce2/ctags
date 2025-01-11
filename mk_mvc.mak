@@ -11,9 +11,9 @@ OBJEXT = obj
 include source.mak
 
 COMMON_DEFINES =
-DEFINES = -DWIN32 $(COMMON_DEFINES) -DHAVE_REPOINFO_H -DHAVE_PACKCC -DREADTAGS_DSL
+DEFINES = $(COMMON_DEFINES) -DHAVE_REPOINFO_H -DHAVE_PACKCC
 INCLUDES = -I. -Ignulib -Imain -Iparsers -Ilibreadtags -Idsl
-OPT = /O2 /WX
+OPT = /O2 /WX /Zc:preprocessor
 PACKCC = packcc.exe
 GNULIB_OBJS = $(MVC_GNULIB_SRCS:.c=.obj)
 WIN32_OBJS = $(WIN32_SRCS:.c=.obj)
@@ -64,7 +64,7 @@ PDBFLAG =
 {extra-cmds}.c{extra-cmds}.obj::
 	$(CC) $(OPT) $(DEFINES) $(INCLUDES) /Foextra-cmds\ /c $<
 {libreadtags}.c{libreadtags}.obj::
-	$(CC) $(OPT) $(DEFINES) $(INCLUDES) /Folibreadtags\ /c $<
+	$(CC) $(OPT) $(DEFINES) -DHAVE_CTAGS_INLINE_H $(INCLUDES) /Folibreadtags\ /c $<
 {dsl}.c{dsl}.obj::
 	$(CC) $(OPT) $(DEFINES) $(INCLUDES) /Fodsl\ /c $<
 {win32\mkstemp}.c{win32\mkstemp}.obj::
@@ -102,10 +102,7 @@ $(PACKCC): $(PACKCC_OBJ)
 
 main\repoinfo.obj: main\repoinfo.c main\repoinfo.h
 
-peg\varlink.c peg\varlink.h: peg\varlink.peg $(PACKCC)
-peg\kotlin.c peg\kotlin.h: peg\kotlin.peg $(PACKCC)
-peg\thrift.c peg\thrift.h: peg\thrift.peg $(PACKCC)
-peg\elm.c peg\elm.h: peg\elm.peg $(PACKCC)
+include win32/peg_rule.mak
 
 $(RES_OBJ): win32/ctags.rc win32/ctags.exe.manifest win32/resource.h
 	$(RC) /nologo /l 0x409 /Fo$@ $*.rc
