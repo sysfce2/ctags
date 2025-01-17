@@ -21,7 +21,7 @@
 #include "parse.h"
 #include "subparser.h"
 
-#include "ruby.h"
+#include "x-ruby.h"
 
 #include <string.h>
 
@@ -78,6 +78,12 @@ static vString *readTask (const unsigned char **cp, bool *variable)
 	vString *vstr = NULL;
 	unsigned char b;
 	const unsigned char *start;
+
+	if (**cp == '(')
+	{
+		++*cp;
+		rubySkipWhitespace (cp);
+	}
 
 	switch (**cp)
 	{
@@ -172,11 +178,6 @@ static int parseXTask (rubySubparser *s, struct taskType *xtask, const unsigned 
 	{
 		vString *vstr = NULL;
 		bool variable = false;
-		if (**cp == '(')
-		{
-			++*cp;
-			rubySkipWhitespace (cp);
-		}
 		vstr = readTask (cp, &variable);
 		if (vstr)
 		{

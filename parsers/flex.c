@@ -327,8 +327,7 @@ static void makeConstTag (tokenInfo *const token, const flexKind kind)
 
 		initRefTagEntry (&e, name, kind, role);
 
-		e.lineNumber   = token->lineNumber;
-		e.filePosition = token->filePosition;
+		updateTagLine (&e, token->lineNumber, token->filePosition);
 
 		if ( vStringLength(token->scope) > 0 )
 		{
@@ -924,20 +923,12 @@ static void skipArrayList (tokenInfo *const token, bool include_newlines)
 
 static void addContext (tokenInfo* const parent, const tokenInfo* const child)
 {
-	if (vStringLength (parent->string) > 0)
-	{
-		vStringPut (parent->string, '.');
-	}
-	vStringCat (parent->string, child->string);
+	vStringJoin (parent->string, '.', child->string);
 }
 
 static void addToScope (tokenInfo* const token, const vString* const extra)
 {
-	if (vStringLength (token->scope) > 0)
-	{
-		vStringPut (token->scope, '.');
-	}
-	vStringCat (token->scope, extra);
+	vStringJoin (token->scope, '.', extra);
 }
 
 /*

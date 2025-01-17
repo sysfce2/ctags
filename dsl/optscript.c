@@ -647,12 +647,13 @@ opt_vm_new (MIO *in, MIO *out, MIO *err)
 }
 
 void
-opt_vm_clear (OptVM *vm)
+opt_vm_clear (OptVM *vm, bool clear_app_data)
 {
 	ptrArrayClear  (vm->estack);
 	ptrArrayClear  (vm->ostack);
 	vm_dstack_clear (vm);
-	vm->app_data = NULL;
+	if (clear_app_data)
+		vm->app_data = NULL;
 	dict_op_clear (vm->error);
 }
 
@@ -2063,7 +2064,7 @@ opt_es_hash (const void * const key)
 	const EsObject *k = key;
 
 	if (es_integer_p (key))
-		return hashInthash (key);
+		return es_integer_get (key);
 	else if (es_boolean_p (key))
 		return es_object_equal (key, es_true)? 1: 0;
 

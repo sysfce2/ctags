@@ -18,7 +18,7 @@
 #include "debug.h"
 #include "entry.h"
 #include "htable.h"
-#include "cpreprocessor.h"
+#include "x-cpreprocessor.h"
 #include "kind.h"
 #include "options.h"
 #include "read.h"
@@ -39,6 +39,25 @@
 /*
 *   DATA DECLARATIONS
 */
+enum eCppCharacters {
+	/* white space characters */
+	SPACE         = ' ',
+	NEWLINE       = '\n',
+	CRETURN       = '\r',
+	FORMFEED      = '\f',
+	TAB           = '\t',
+	VTAB          = '\v',
+
+	/* some hard to read characters */
+	DOUBLE_QUOTE  = '"',
+	SINGLE_QUOTE  = '\'',
+	BACKSLASH     = '\\',
+
+	/* symbolic representations, above 0xFF not to conflict with any byte */
+	STRING_SYMBOL = CPP_STRING_SYMBOL,
+	CHAR_SYMBOL   = CPP_CHAR_SYMBOL
+};
+
 typedef enum { COMMENT_NONE, COMMENT_C, COMMENT_CPLUS, COMMENT_D } Comment;
 
 enum eCppLimits {
@@ -157,10 +176,6 @@ static roleDefinition CPREPROHeaderRoles [] = {
 	RoleTemplateLocal,
 };
 
-
-typedef enum {
-	CPREPRO_MACRO, CPREPRO_HEADER, CPREPRO_PARAM,
-} cPreProkind;
 
 static kindDefinition CPreProKinds [] = {
 	{ true,  'd', "macro",      "macro definitions",
@@ -994,8 +1009,7 @@ static int directiveDefine (const int c, bool undef)
 				tagEntryInfo *e = getEntryInCorkQueue (r);
 				if (e)
 				{
-					e->lineNumber = lineNumber;
-					e->filePosition = filePosition;
+					updateTagLine (e, lineNumber, filePosition);
 					patchScopeFieldOfParameters (param_start, param_end, r);
 				}
 			}
@@ -1368,7 +1382,7 @@ static int skipToEndOfString (bool ignoreBackslash)
 		else if (c == DOUBLE_QUOTE)
 			break;
 		else
-			vStringPutWithLimit (Cpp.charOrStringContents, c, 1024);
+			(void)vStringPutWithLimit (Cpp.charOrStringContents, c, 1024);
 	}
 	return STRING_SYMBOL;  /* symbolic representation of string */
 }
@@ -1464,7 +1478,7 @@ static int skipToEndOfChar (void)
 			if (count == 1  &&  strchr ("DHOB", toupper (c)) != NULL)
 			{
 				veraBase = c;
-				vStringPutWithLimit (Cpp.charOrStringContents, c, 10);
+				(void)vStringPutWithLimit (Cpp.charOrStringContents, c, 10);
 			}
 			else if (veraBase != '\0'  &&  ! isalnum (c))
 			{
@@ -1472,10 +1486,10 @@ static int skipToEndOfChar (void)
 				break;
 			}
 			else
-				vStringPutWithLimit (Cpp.charOrStringContents, c, 10);
+				(void)vStringPutWithLimit (Cpp.charOrStringContents, c, 10);
 		}
 		else
-			vStringPutWithLimit (Cpp.charOrStringContents, c, 10);
+			(void)vStringPutWithLimit (Cpp.charOrStringContents, c, 10);
 	}
 	return CHAR_SYMBOL;  /* symbolic representation of character */
 }
@@ -1483,12 +1497,12 @@ static int skipToEndOfChar (void)
 static void attachFields (int macroCorkIndex, unsigned long endLine, const char *macrodef)
 {
 	tagEntryInfo *tag = getEntryInCorkQueue (macroCorkIndex);
-	if (!tag)
-		return;
-
-	tag->extensionFields.endLine = endLine;
-	if (macrodef)
-		attachParserFieldToCorkEntry (macroCorkIndex, Cpp.macrodefFieldIndex, macrodef);
+	if (tag)
+	{
+		setTagEndLine (tag, endLine);
+		if (macrodef)
+			attachParserField (tag, Cpp.macrodefFieldIndex, macrodef);
+	}
 }
 
 static vString * conditionMayFlush (vString* condition, bool del)
@@ -1534,7 +1548,7 @@ static void conditionMayPut (vString *condition, int c)
 		vStringPut(condition, c);
 }
 
-extern void cStringPut (vString* string, const int c)
+extern void cppVStringPut (vString* string, const int c)
 {
 	if (c <= 0xff)
 		vStringPut (string, c);
@@ -1954,7 +1968,7 @@ process:
 	if (condition)
 		vStringDelete (condition);
 
-	DebugStatement ( debugPutc (DEBUG_CPP, c); )
+	DebugStatement ( cppDebugPutc (DEBUG_CPP, c); )
 	DebugStatement ( if (c == NEWLINE)
 				debugPrintf (DEBUG_CPP, "%6ld: ", getInputLineNumber () + 1); )
 
@@ -2636,3 +2650,17 @@ extern parserDefinition* CPreProParser (void)
 	def->useCork = CORK_QUEUE | CORK_SYMTAB;
 	return def;
 }
+
+#ifdef DEBUG
+extern void cppDebugPutc (const int level, const int c)
+{
+	if (debug (level)  &&  c != EOF)
+	{
+		     if (c == STRING_SYMBOL)  printf ("\"string\"");
+		else if (c == CHAR_SYMBOL)    printf ("'c'");
+		else                          putchar (c);
+
+		fflush (stdout);
+	}
+}
+#endif

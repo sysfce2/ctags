@@ -24,6 +24,12 @@
 #include <libxml/xpath.h>
 #include <libxml/tree.h>
 
+extern  void updateXMLTagLine (tagEntryInfo *e, xmlNode *node)
+{
+	unsigned long lineNumber = XML_GET_LINE (node);
+	updateTagLine (e, lineNumber, getInputFilePositionForLine (lineNumber));
+}
+
 static void simpleXpathMakeTag (xmlNode *node,
 				const char *xpath,
 				const tagXpathMakeTagSpec *spec,
@@ -53,9 +59,9 @@ static void simpleXpathMakeTag (xmlNode *node,
 	else
 		goto out;
 
-
-	tag.lineNumber = XML_GET_LINE (node);
-	tag.filePosition = getInputFilePositionForLine (tag.lineNumber);
+	/* TODO
+	 * - adjust the line number for the node forward if node is an attribute. */
+	updateXMLTagLine (&tag, node);
 
 	path = (char *)xmlGetNodePath (node);
 	tag.extensionFields.xpath = path;
@@ -164,8 +170,12 @@ static xmlDocPtr makeXMLDoc (void)
 	if (data)
 	{
 		xmlSetGenericErrorFunc (NULL, suppressWarning);
+#ifdef IS_xmlLineNumbersDefault_DEPRECATED
+		doc = xmlReadMemory((const char *)data, size, NULL, NULL, 0);
+#else
 		xmlLineNumbersDefault (1);
 		doc = xmlParseMemory((const char*)data, size);
+#endif
 	}
 
 	return doc;
@@ -241,6 +251,9 @@ extern void findXMLTagsFull (xmlXPathContext *ctx, xmlNode *root,
 {
 }
 
+extern  void updateXMLTagLine (tagEntryInfo *e, xmlNode *node)
+{
+}
 #endif
 
 extern void findXMLTags (xmlXPathContext *ctx, xmlNode *root,

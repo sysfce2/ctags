@@ -1,10 +1,40 @@
-# Version ???
+# Version XXX
+
+- imporve performance; put inline keyword on a hot spot function.
+
+	- before this change
+
+		```
+		$ /bin/time ./readtags -t ~/.citre/kernel82.tags -l > /dev/null
+		9.59user 0.42system 0:10.06elapsed 99%CPU (0avgtext+0avgdata 2819340maxresident)k
+		0inputs+0outputs (0major+44149minor)pagefaults 0swaps
+		```
+
+	- after this change
+
+		```
+		$ /bin/time ./readtags -t ~/.citre/kernel82.tags -l > /dev/null
+		7.82user 0.43system 0:08.30elapsed 99%CPU (0avgtext+0avgdata 2819688maxresident)k
+		0inputs+0outputs (0major+44138minor)pagefaults 0swaps
+		```
+
+# Version 0.4.0
+
+- support cmake as a build system (ParticleG <particle_g@outlook.com>)
+
+- add libreadtags-uninstalled.pc.in.
+
+# Version 0.3.0
+
+- fix calls to ctype functions (Colomban Wendling <ban@herbesfolles.org>)
 
 - read input fields, values at the second column in a tag file, with
   unescaping if !_TAG_OUTPUT_MODE is "u-ctags" and
   !_TAG_OUTPUT_FILESEP is "slash" in the tag file.
 
-- LT_VERSION ?:?:?
+- LT_VERSION 2:2:1
+
+	- no change in public interface
 
 # Version 0.2.1
 

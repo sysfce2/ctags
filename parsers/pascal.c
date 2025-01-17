@@ -59,7 +59,7 @@ static void createPascalTag (
 		initTagEntry (tag, NULL, KIND_GHOST_INDEX);
 }
 
-static void makePascalTag (const tagEntryInfo* const tag)
+static void makePascalTag (tagEntryInfo* const tag)
 {
 	if (tag->name != NULL)
 		makeTagEntry (tag);
@@ -178,6 +178,9 @@ static void findPascalTags (void)
 
 		if (c == '\0')  /* if end of line */
 		{
+			if (incomment && comment_char == '/')
+				incomment = false;
+
 			dbp = readLineFromInputFile ();
 			if (dbp == NULL  ||  *dbp == '\0')
 				continue;
@@ -212,6 +215,14 @@ static void findPascalTags (void)
 			case '{':  /* found open { comment */
 				incomment = true;
 				comment_char = c;
+				continue;
+			case '/':
+				if (*dbp == '/')  /* found one line // comment */
+				{
+					incomment = true;
+					comment_char = c;
+					dbp++;
+				}
 				continue;
 			case '(':
 				if (*dbp == '*')  /* found open (* comment */

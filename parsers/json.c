@@ -128,10 +128,9 @@ static void makeJsonTag (tokenInfo *const token, const jsonKind kind)
 
 	initTagEntry (&e, vStringValue (token->string), kind);
 
-	e.lineNumber	= token->lineNumber;
-	e.filePosition	= token->filePosition;
+	updateTagLine (&e, token->lineNumber, token->filePosition);
 
-	if (vStringLength (token->scope) > 0)
+	if (!vStringIsEmpty (token->scope))
 	{
 		Assert (token->scopeKind > TAG_NONE && token->scopeKind < TAG_COUNT);
 
@@ -140,6 +139,17 @@ static void makeJsonTag (tokenInfo *const token, const jsonKind kind)
 	}
 
 	makeTagEntry (&e);
+
+	if (!vStringIsEmpty (token->scope) && isXtagEnabled (XTAG_QUALIFIED_TAGS))
+	{
+		vString *qname = vStringNewCopy(token->scope);
+		vStringPut(qname, '.');
+		vStringCat(qname, token->string);
+		e.name = vStringValue(qname);
+		markTagExtraBit(&e, XTAG_QUALIFIED_TAGS);
+		makeTagEntry (&e);
+		vStringDelete (qname);
+	}
 }
 
 #define DEPTH_LIMIT 512
@@ -244,9 +254,7 @@ static void pushScope (tokenInfo *const token,
 					   const tokenInfo *const parent,
 					   const jsonKind parentKind)
 {
-	if (vStringLength (token->scope) > 0)
-		vStringPut (token->scope, '.');
-	vStringCat (token->scope, parent->string);
+	vStringJoin(token->scope, '.', parent->string);
 	token->scopeKind = parentKind;
 }
 

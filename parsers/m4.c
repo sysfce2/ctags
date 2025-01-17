@@ -16,7 +16,7 @@
 #include "entry.h"
 #include "htable.h"
 #include "keyword.h"
-#include "m4.h"
+#include "x-m4.h"
 #include "numarray.h"
 #include "parse.h"
 #include "read.h"
@@ -524,9 +524,7 @@ static void parseM4Char (struct m4Ctx *ctx, vString *const token, int c)
 	}
 	else if (c == ')')
 	{
-		tagEntryInfo *e = getEntryInCorkQueue (topIndex(ctx));
-		if (e)
-			e->extensionFields.endLine = getInputLineNumber ();
+		setTagEndLineToCorkEntry (topIndex (ctx),getInputLineNumber ());
 		popIndexSafe (ctx);
 	}
 }

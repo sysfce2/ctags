@@ -202,7 +202,7 @@
 % define @1 ~ @9.
 1 1 9 {
     dup
-    mark (- @) 3 -1 roll ?0 add ( matchloc) _buildstring
+    mark (- @) 3 -1 roll ?0 add ( start:matchloc) _buildstring
     exch dup
     mark (@) 3 -1 roll ?0 add _buildstring cvn
     exch
@@ -212,7 +212,7 @@
 % define 1@ ~ 9@.
 1 1 9 {
     dup
-    mark (- ) 3 -1 roll ?0 add (@ matchloc) _buildstring
+    mark (- ) 3 -1 roll ?0 add (@ end:matchloc) _buildstring
     exch dup
     mark exch ?0 add (@) _buildstring cvn
     exch
@@ -249,8 +249,18 @@
     _foreignreftag
 } __bddef
 
-(name:str language:name kind:name matchloc _FOREIGNTAG tag
+(name:str lang:name kind:name matchloc _FOREIGNTAG tag
  name:str lang:name kind:name _FOREIGNTAG tag)
 /_foreigntag {
-    null _foreignreftag
+    dup type /nametype eq {
+        % name:str lang:name kind:name
+        null
+        % name:str lang:name kind:name null
+        _foreignreftag
+    } {
+        % name:str language:name kind:name matchloc
+        null exch
+        % name:str language:name kind:name null matchloc
+        _foreignreftag
+    } ifelse
 } __bddef

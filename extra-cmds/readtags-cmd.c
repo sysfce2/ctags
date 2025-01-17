@@ -16,14 +16,21 @@
 
 #include "vstring.h"
 #include "htable.h"
+#include "intern.h"
+#include "ptrarray.h"
 #include "fname.h"
+
+#include "dsl/qualifier.h"
+#include "dsl/sorter.h"
+#include "dsl/formatter.h"
 
 #include <string.h>		/* strerror */
 #include <stdlib.h>		/* exit */
 #include <stdio.h>		/* stderr */
+#include <stdbool.h>
 
 typedef struct sReadOption {
-	int sortOverride;
+	bool sortOverride;
 	sortType sortMethod;
 	/* options passed to libreadtags API functions.*/
 	int matchOpts;
@@ -31,21 +38,44 @@ typedef struct sReadOption {
 
 struct canonWorkArea {
 	struct canonFnameCacheTable *cacheTable;
-	int ptags;
-	bool absoluteOnly;
 };
 
-static const char *TagFileName = "tags";
+typedef struct tagFileX {
+	const char *fileName;
+	tagFile *tagFile;
+	tagFileInfo info;
+	struct canonWorkArea *canon;
+} tagFileX;
+
+struct inputSpec {
+	const char *tagFileName;
+	char *tempFileName;
+	struct canonWorkArea canon;
+	tagFileX *fileX;
+};
+
+enum actionType {
+		ACTION_NONE,
+		ACTION_FIND = 1 << 0,
+		ACTION_LIST = 1 << 1,
+		ACTION_LIST_PTAGS = 1 << 2,
+};
+
+struct actionSpec {
+	unsigned int action;		/* bitset of actionType items */
+	const char *name;			/* for ACTION_FIND */
+	bool canonicalizing;
+	bool absoluteOnly;
+	ptrArray *tagEntryArray;
+	void (* walkerfn) (const tagEntry *, void *);
+	void *dataForWalkerFn;
+	QCode *qualifier;
+	SCode *sorter;
+	FCode *formatter;
+};
+
 static const char *ProgramName;
 static int debugMode;
-#ifdef READTAGS_DSL
-#include "dsl/qualifier.h"
-static QCode *Qualifier;
-#include "dsl/sorter.h"
-static SCode *Sorter;
-#include "dsl/formatter.h"
-static FCode *Formatter;
-#endif
 
 static const char* tagsStrerror (int err)
 {
@@ -76,30 +106,30 @@ static void printTag (const tagEntry *entry, void *data)
 	tagsPrint (entry, (tagPrintOptions *)data, NULL, stdout);
 }
 
-#ifdef READTAGS_DSL
-static void printTagWithFormatter (const tagEntry *entry, void *unused)
+static void printTagWithFormatter (const tagEntry *entry, void *data)
 {
-	f_print (entry, Formatter, stdout);
+	struct actionSpec *actionSpec = data;
+	f_print (entry, actionSpec->formatter, stdout);
 }
-#endif
 
 static void printPseudoTag (const tagEntry *entry, void *data)
 {
 	tagsPrintPseudoTag (entry, (tagPrintOptions *)data, NULL, stdout);
 }
 
-#ifdef READTAGS_DSL
 static void freeCopiedTag (tagEntry *e)
 {
 	free ((void *)e->name);
-	free ((void *)e->file);
+	/* Don't free. The value is interned. */
+	e->file = NULL;
 	if (e->address.pattern)
 		free ((void *)e->address.pattern);
-	if (e->kind)
-		free ((void *)e->kind);
+	/* Don't free. The value is interned. */
+	e->kind = NULL;
 	for (unsigned short c = 0; c < e->fields.count; c++)
 	{
-		free ((void *)e->fields.list[c].key);
+		/* Don't free. The value is interned. */
+		e->fields.list[c].key = NULL;
 		free ((void *)e->fields.list[c].value);
 	}
 	if (e->fields.count)
@@ -116,7 +146,7 @@ static tagEntry *copyTag (tagEntry *o)
 	n->name = eStrdup (o->name);
 
 	if (o->file)
-		n->file = eStrdup (o->file);
+		n->file = intern (o->file);
 
 	if (o->address.pattern)
 		n->address.pattern = eStrdup (o->address.pattern);
@@ -124,7 +154,7 @@ static tagEntry *copyTag (tagEntry *o)
 	n->address.lineNumber = o->address.lineNumber;
 
 	if (o->kind)
-		n->kind = eStrdup (o->kind);
+		n->kind = intern (o->kind);
 
 	n->fileScope = o->fileScope;
 	n->fields.count = o->fields.count;
@@ -136,93 +166,47 @@ static tagEntry *copyTag (tagEntry *o)
 
 	for (unsigned short c = 0; c < o->fields.count; c++)
 	{
-		n->fields.list[c].key = eStrdup (o->fields.list[c].key);
+		n->fields.list[c].key = intern (o->fields.list[c].key);
 		n->fields.list[c].value = eStrdup (o->fields.list[c].value);
 	}
 
 	return n;
 }
 
-struct tagEntryHolder {
-	tagEntry *e;
-};
-struct tagEntryArray {
-	int count;
-	int length;
-	struct tagEntryHolder *a;
-};
-
-static struct tagEntryArray *tagEntryArrayNew (void)
+static int compareTagEntry (const void *a, const void *b, void *sorter)
 {
-	struct tagEntryArray * a = eMalloc (sizeof (struct tagEntryArray));
-
-	a->count = 0;
-	a->length = 1024;
-	a->a = eMalloc(a->length * sizeof (a->a[0]));
-
-	return a;
+	return s_compare (a, b, sorter);
 }
 
-static void tagEntryArrayPush (struct tagEntryArray *a, tagEntry *e)
+static const char *canonicalizeFileNameX(tagFileX *const filex, const char *input)
 {
-	if (a->count + 1 == a->length)
-	{
-		if (a->length * 2 < a->length) {
-			fprintf(stderr, "too large array allocation");
-			exit(1);
-		}
-
-		struct tagEntryHolder *tmp = eRealloc (a->a, sizeof (a->a[0]) * (a->length * 2));
-		a->a = tmp;
-		a->length *= 2;
-	}
-
-	a->a[a->count++].e = e;
+	return canonicalizeFileName (filex->canon->cacheTable, input);
 }
 
-static void tagEntryArrayFree (struct tagEntryArray *a, int freeTags)
-{
-	if (freeTags)
-	{
-		for (int i = 0; i < a->count; i++)
-			freeCopiedTag (a->a[i].e);
-	}
-	free (a->a);
-	free (a);
-}
-
-static int compareTagEntry (const void *a, const void *b)
-{
-	return s_compare (((struct tagEntryHolder *)a)->e, ((struct tagEntryHolder *)b)->e, Sorter);
-}
-
-static void walkTags (tagFile *const file, tagEntry *first_entry,
+static void walkTags (tagFileX *const filex, tagEntry *first_entry, bool on_ptags,
 					  tagResult (* nextfn) (tagFile *const, tagEntry *),
 					  void (* actionfn) (const tagEntry *, void *), void *data,
-					  struct canonWorkArea *canon)
+					  struct actionSpec *actionSpec)
 {
-	struct tagEntryArray *a = NULL;
-
-	if (Sorter)
-		a = tagEntryArrayNew ();
+	tagFile *const file = filex->tagFile;
+	ptrArray *a = actionSpec->tagEntryArray;
 
 	do
 	{
 		tagEntry *shadow = first_entry;
 		tagEntry  shadowRec;
-		if (canon
-			&& (canon->ptags == 0
+		if (actionSpec->canonicalizing
+			&& (on_ptags == false
 				|| strcmp (first_entry->name, "!_TAG_PROC_CWD") == 0))
 		{
 			shadowRec = *first_entry;
 			shadow = &shadowRec;
-			shadow->file = canonicalizeFileName (canon->cacheTable,
-												 first_entry->file);
+			shadow->file = canonicalizeFileNameX (filex, first_entry->file);
 		}
 
-		if (Qualifier)
+		if (actionSpec->qualifier)
 		{
-			int i = q_is_acceptable (Qualifier, shadow);
+			int i = q_is_acceptable (actionSpec->qualifier, shadow);
 			switch (i)
 			{
 			case Q_REJECT:
@@ -235,7 +219,7 @@ static void walkTags (tagFile *const file, tagEntry *first_entry,
 		if (a)
 		{
 			tagEntry *e = copyTag (shadow);
-			tagEntryArrayPush (a, e);
+			ptrArrayAdd (a, e);
 		}
 		else
 			(* actionfn) (shadow, data);
@@ -252,46 +236,10 @@ static void walkTags (tagFile *const file, tagEntry *first_entry,
 
 	if (a)
 	{
-		qsort (a->a, a->count, sizeof (a->a[0]), compareTagEntry);
-		for (int i = 0; i < a->count; i++)
-			(* actionfn) (a->a[i].e, data);
-		tagEntryArrayFree (a, 1);
+		actionSpec->walkerfn = actionfn;
+		actionSpec->dataForWalkerFn = data;
 	}
 }
-#else
-static void walkTags (tagFile *const file, tagEntry *first_entry,
-					  tagResult (* nextfn) (tagFile *const, tagEntry *),
-					  void (* actionfn) (const tagEntry *, void *), void *data,
-					  struct canonWorkArea *canon)
-{
-	do
-	{
-		tagEntry *shadow = first_entry;
-		tagEntry  shadowRec;
-		if (canon
-			&& (canon->ptags == 0
-				|| strcmp (first_entry->name, "!_TAG_PROC_CWD") == 0))
-		{
-			shadow = &shadowRec;
-			shadowRec = *first_entry;
-			shadow->file = canonicalizeFileName (canon->cacheTable,
-												 first_entry->file);
-		}
-
-		(* actionfn) (shadow, data);
-	}
-	while ( (*nextfn) (file, first_entry) == TagSuccess);
-
-	int err = tagsGetErrno (file);
-	if (err != 0)
-	{
-		fprintf (stderr, "%s: error in walkTags(): %s\n",
-				 ProgramName,
-				 tagsStrerror (err));
-		exit (1);
-	}
-}
-#endif
 
 static int copyFile (FILE *in, FILE *out)
 {
@@ -323,34 +271,28 @@ static int copyFile (FILE *in, FILE *out)
 	return 0;
 }
 
-static void removeTagFile (void)
+static const char *loadCtagsCWD (tagFileX *const fileX, tagEntry *pentry)
 {
-	remove (TagFileName);
-	eFree ((char *)TagFileName);
-}
-
-static const char *loadCtagsCWD (tagFile *const file, tagEntry *pentry)
-{
-	if (tagsFindPseudoTag (file, pentry, "!_TAG_PROC_CWD",
+	if (tagsFindPseudoTag (fileX->tagFile, pentry, "!_TAG_PROC_CWD",
 						   TAG_FULLMATCH) != TagSuccess)
 	{
-		int err = tagsGetErrno (file);
+		int err = tagsGetErrno (fileX->tagFile);
 		if (!err)
 		{
 			fprintf (stderr, "%s: no !_TAG_PROC_CWD in %s\n",
-					 ProgramName, TagFileName);
+					 ProgramName, fileX->fileName);
 			exit (1);
 		}
 
 		fprintf (stderr, "%s: cannot find !_TAG_PROC_CWD in %s: %s\n",
-				 ProgramName, TagFileName, tagsStrerror (err));
+				 ProgramName, fileX->fileName, tagsStrerror (err));
 		exit (1);
 	}
 
 	if (pentry->file[0] != '/')
 	{
 		fputs ("!_TAG_PROC_CWD must start with '/': ", stderr);
-		tagsPrintValue (pentry->file, 1, NULL, stderr);
+		tagsPrintValue (pentry->file, true, NULL, stderr);
 		fputc ('\n', stderr);
 		exit (1);
 	}
@@ -358,17 +300,46 @@ static const char *loadCtagsCWD (tagFile *const file, tagEntry *pentry)
 	return pentry->file;
 }
 
-static struct canonFnameCacheTable *makeCanonFnameCacheTable (tagFile *const file,
+static struct canonFnameCacheTable *makeCanonFnameCacheTable (tagFileX *const fileX,
 															  bool absoluteOnly)
 {
 	tagEntry pentry;
-	const char *cwd = loadCtagsCWD (file, &pentry);
+	const char *cwd = loadCtagsCWD (fileX, &pentry);
 	return canonFnameCacheTableNew (cwd, absoluteOnly);
 }
 
-static tagFile *openTags (const char *const filePath, tagFileInfo *const info)
+static tagFileX *makeTagFileX (const char *const filePath)
 {
-	if (strcmp (filePath, "-") == 0)
+	tagFileX *fileX = eMalloc (sizeof (*fileX));
+	fileX->fileName = eStrdup(filePath);
+	fileX->tagFile = NULL;
+	fileX->info = (tagFileInfo){0};
+	fileX->canon = NULL;
+	return fileX;
+}
+
+static void deleteTagFileX (tagFileX *fileX)
+{
+	eFree ((void *)fileX->fileName);
+	if (fileX->tagFile)
+		tagsClose (fileX->tagFile);
+	eFree (fileX);
+
+}
+
+static tagFileX *openTagFileX  (tagFileX *fileX)
+{
+	fileX->tagFile = tagsOpen (fileX->fileName, &fileX->info);
+	return fileX;
+}
+
+static tagFileX *openTags (struct inputSpec *inputSpec)
+{
+	tagFileX *fileX;
+
+	if (inputSpec->tempFileName)
+		fileX = makeTagFileX(inputSpec->tempFileName);
+	else if (strcmp (inputSpec->tagFileName, "-") == 0)
 	{
 		char *tempName = NULL;
 		FILE *tempFP = tempFileFP ("w", &tempName);
@@ -379,11 +350,14 @@ static tagFile *openTags (const char *const filePath, tagFileInfo *const info)
 					 ProgramName);
 			exit (1);
 		}
-		TagFileName = tempName;
-		atexit (removeTagFile);
+
+		fileX = makeTagFileX(tempName);
+		inputSpec->tempFileName = tempName; /* Move the ownership. */
+		tempName = NULL;					/* Don't touch this anymore. */
 
 		if (copyFile (stdin, tempFP) < 0)
 		{
+			deleteTagFileX (fileX);
 			fclose (tempFP);
 			exit (1);
 		}
@@ -392,13 +366,17 @@ static tagFile *openTags (const char *const filePath, tagFileInfo *const info)
 		{
 			fprintf (stderr, "%s: failed to flush a temporarily file for storing data from stdin\n",
 					 ProgramName);
+			deleteTagFileX (fileX);
+			fclose (tempFP);
 			exit (1);
 		}
-		fclose (tempFP);
-		return tagsOpen (tempName, info);
-	}
 
-	return tagsOpen (filePath, info);
+		fclose (tempFP);
+	}
+	else
+		fileX = makeTagFileX(inputSpec->tagFileName);
+
+	return openTagFileX (fileX);
 }
 
 static int hasPsuedoTag (tagFile *const file,
@@ -411,38 +389,50 @@ static int hasPsuedoTag (tagFile *const file,
 			&& (strcmp(entry.file, exepectedValueAsInputField) == 0));
 }
 
-static void findTag (const char *const name, readOptions *readOpts,
-					 tagPrintOptions *printOpts, struct canonWorkArea *canon)
+struct canonWorkArea *prepareCanonFnameCacheTable (struct canonWorkArea *canon,
+												   tagFileX *const fileX,
+												   bool absoluteOnly)
 {
-	tagFileInfo info;
+	if (canon->cacheTable == NULL)
+		canon->cacheTable = makeCanonFnameCacheTable (fileX, absoluteOnly);
+
+	return canon;
+}
+
+static void dropCanonFnameCacheTableMaybe (struct canonWorkArea *canon)
+{
+	if (canon->cacheTable)
+	{
+		canonFnameCacheTableDelete (canon->cacheTable);
+		canon->cacheTable = NULL;
+	}
+}
+
+static void findTag (struct inputSpec *inputSpec,
+					 const char *const name, readOptions *readOpts,
+					 tagPrintOptions *printOpts, struct actionSpec *actionSpec)
+{
 	tagEntry entry;
 	int err = 0;
-	tagFile *const file = openTags (TagFileName, &info);
-	if (file == NULL || !info.status.opened)
-	{
-		fprintf (stderr, "%s: cannot open tag file: %s: %s\n",
-				 ProgramName, tagsStrerror (info.status.error_number), TagFileName);
-		if (file)
-			tagsClose (file);
-		exit (1);
-	}
+	tagFileX *const fileX = inputSpec->fileX;
 
-	if (canon && canon->cacheTable == NULL)
-		canon->cacheTable = makeCanonFnameCacheTable (file, canon->absoluteOnly);
+	if (actionSpec->canonicalizing)
+		fileX->canon = prepareCanonFnameCacheTable (&inputSpec->canon,
+													fileX, actionSpec->absoluteOnly);
 
 	if (printOpts->escaping)
 	{
-		printOpts->escapingInputField = 0;
-		if (hasPsuedoTag (file, "!_TAG_OUTPUT_MODE", "u-ctags")
-			&& hasPsuedoTag (file, "!_TAG_OUTPUT_FILESEP", "slash"))
-			printOpts->escapingInputField = 1;
+		printOpts->escapingInputField = false;
+		if (hasPsuedoTag (fileX->tagFile, "!_TAG_OUTPUT_MODE", "u-ctags")
+			&& hasPsuedoTag (fileX->tagFile, "!_TAG_OUTPUT_FILESEP", "slash"))
+			printOpts->escapingInputField = true;
 	}
 
 	if (readOpts->sortOverride)
 	{
-		if (tagsSetSortType (file, readOpts->sortMethod) != TagSuccess)
+		if (tagsSetSortType (fileX->tagFile, readOpts->sortMethod) != TagSuccess)
 		{
-			err = tagsGetErrno (file);
+			err = tagsGetErrno (fileX->tagFile);
 			fprintf (stderr, "%s: cannot set sort type to %d: %s\n",
 					 ProgramName,
 					 readOpts->sortMethod,
@@ -452,59 +442,47 @@ static void findTag (const char *const name, readOptions *readOpts,
 	}
 	if (debugMode)
 		fprintf (stderr, "%s: searching for \"%s\" in \"%s\"\n",
-					 ProgramName, name, TagFileName);
-	if (tagsFind (file, &entry, name, readOpts->matchOpts) == TagSuccess)
-		walkTags (file, &entry, tagsFindNext,
-#ifdef READTAGS_DSL
-				  Formatter? printTagWithFormatter:
-#endif
-				  printTag, printOpts,
-				  canon);
-	else if ((err = tagsGetErrno (file)) != 0)
+					 ProgramName, name, fileX->fileName);
+	if (tagsFind (fileX->tagFile, &entry, name, readOpts->matchOpts) == TagSuccess)
+		walkTags (fileX, &entry, false, tagsFindNext,
+				  actionSpec->formatter? printTagWithFormatter: printTag,
+				  actionSpec->formatter? (void *)actionSpec: (void *)printOpts,
+				  actionSpec);
+	else if ((err = tagsGetErrno (fileX->tagFile)) != 0)
 	{
 		fprintf (stderr, "%s: error in tagsFind(): %s\n",
 				 ProgramName,
 				 tagsStrerror (err));
 		exit (1);
 	}
-	tagsClose (file);
 }
 
-static void listTags (int pseudoTags, tagPrintOptions *printOpts,
-					  struct canonWorkArea *canon)
+static void listTags (struct inputSpec* inputSpec, bool pseudoTags, tagPrintOptions *printOpts,
+					  struct actionSpec *actionSpec)
 {
-	tagFileInfo info;
 	tagEntry entry;
 	int err = 0;
-	tagFile *const file = openTags (TagFileName, &info);
-	if (file == NULL || !info.status.opened)
-	{
-		fprintf (stderr, "%s: cannot open tag file: %s: %s\n",
-				 ProgramName,
-				 tagsStrerror (info.status.error_number),
-				 TagFileName);
-		if (file)
-			tagsClose (file);
-		exit (1);
-	}
+	tagFileX *const fileX = inputSpec->fileX;
 
-	if (canon && canon->cacheTable == NULL)
-		canon->cacheTable = makeCanonFnameCacheTable (file, canon->absoluteOnly);
+	if (actionSpec->canonicalizing)
+		fileX->canon = prepareCanonFnameCacheTable (&inputSpec->canon,
+													fileX, actionSpec->absoluteOnly);
 
 	if (printOpts->escaping)
 	{
-		printOpts->escapingInputField = 0;
-		if (hasPsuedoTag (file, "!_TAG_OUTPUT_MODE", "u-ctags")
-			&& hasPsuedoTag (file, "!_TAG_OUTPUT_FILESEP", "slash"))
-			printOpts->escapingInputField = 1;
+		printOpts->escapingInputField = false;
+		if (hasPsuedoTag (fileX->tagFile, "!_TAG_OUTPUT_MODE", "u-ctags")
+			&& hasPsuedoTag (fileX->tagFile, "!_TAG_OUTPUT_FILESEP", "slash"))
+			printOpts->escapingInputField = true;
 	}
 
 	if (pseudoTags)
 	{
-		if (tagsFirstPseudoTag (file, &entry) == TagSuccess)
-			walkTags (file, &entry, tagsNextPseudoTag, printPseudoTag, printOpts,
-					  canon);
-		else if ((err = tagsGetErrno (file)) != 0)
+		if (tagsFirstPseudoTag (fileX->tagFile, &entry) == TagSuccess)
+			walkTags (fileX, &entry, true, tagsNextPseudoTag,
+					  printPseudoTag, printOpts,
+					  actionSpec);
+		else if ((err = tagsGetErrno (fileX->tagFile)) != 0)
 		{
 			fprintf (stderr, "%s: error in tagsFirstPseudoTag(): %s\n",
 					 ProgramName,
@@ -514,14 +492,12 @@ static void listTags (int pseudoTags, tagPrintOptions *printOpts,
 	}
 	else
 	{
-		if (tagsFirst (file, &entry) == TagSuccess)
-			walkTags (file, &entry, tagsNext,
-#ifdef READTAGS_DSL
-					  Formatter? printTagWithFormatter:
-#endif
-					  printTag, printOpts,
-					  canon);
-		else if ((err = tagsGetErrno (file)) != 0)
+		if (tagsFirst (fileX->tagFile, &entry) == TagSuccess)
+			walkTags (fileX, &entry, false, tagsNext,
+					  actionSpec->formatter? printTagWithFormatter: printTag,
+					  actionSpec->formatter? (void *)actionSpec: (void *)printOpts,
+					  actionSpec);
+		else if ((err = tagsGetErrno (fileX->tagFile)) != 0)
 		{
 			fprintf (stderr, "%s: error in tagsFirst(): %s\n",
 					 ProgramName,
@@ -529,7 +505,6 @@ static void listTags (int pseudoTags, tagPrintOptions *printOpts,
 			exit (1);
 		}
 	}
-	tagsClose (file);
 }
 
 static const char *const Usage =
@@ -537,11 +512,9 @@ static const char *const Usage =
 	"Usage: \n"
 	"    %s -h | --help\n"
 	"        Print this help message.\n"
-#ifdef READTAGS_DSL
 	"    %s -H POSTPROCESSOR | --help-expression POSTPROCESSOR\n"
 	"        Print available terms that can be used in POSTPROCESSOR expression.\n"
 	"        POSTPROCESSOR: filter sorter formatter\n"
-#endif
 	"    %s -v | --version\n"
 	"        Print the version identifier.\n"
 	"    %s [OPTIONS] ACTION\n"
@@ -567,6 +540,8 @@ static const char *const Usage =
 	"        Also include the line number field when -e option is given.\n"
 	"    -p | --prefix-match\n"
 	"        Perform prefix matching in the NAME action.\n"
+	"    -P | --with-pseudo-tags\n"
+	"        List pseudo tags as if -D option is specified but continues processing without exiting.\n"
 	"    -t TAGFILE | --tag-file TAGFILE\n"
 	"        Use specified tag file (default: \"tags\").\n"
 	"        \"-\" indicates taking tag file data from standard input.\n"
@@ -577,28 +552,23 @@ static const char *const Usage =
 	"        Reduct '..' and '.' in input fields.\n"
 	"    -A | --absolute-input\n"
 	"        Do the same as -C but use absolute path form\n"
-#ifdef READTAGS_DSL
 	"    -F EXP | --formatter EXP\n"
 	"        Format the tags listed by ACTION with EXP when printing.\n"
 	"    -Q EXP | --filter EXP\n"
 	"        Filter the tags listed by ACTION with EXP before printing.\n"
 	"    -S EXP | --sorter EXP\n"
 	"        Sort the tags listed by ACTION with EXP before printing.\n"
-#endif
 	;
 
 static void printUsage(FILE* stream, int exitCode)
 {
 	fprintf (stream, Usage, ProgramName,
-#ifdef READTAGS_DSL
 			 ProgramName,
-#endif
 			 ProgramName,
 			 ProgramName);
 	exit (exitCode);
 }
 
-#ifdef READTAGS_DSL
 static void printFilterExpression (FILE *stream, int exitCode)
 {
 	fprintf (stream, "Filter expression: \n");
@@ -645,7 +615,105 @@ static void *compileExpression(const char* exp, void * (*compiler) (EsObject *),
 	es_object_unref (sexp);
 	return code;
 }
-#endif
+
+static tagFileX *openTagsX (struct inputSpec *inputSpec)
+{
+	tagFileX *const fileX = openTags (inputSpec);
+
+	if (fileX->tagFile == NULL || !fileX->info.status.opened)
+	{
+		fprintf (stderr, "%s: cannot open tag file: %s: %s\n",
+				 ProgramName, tagsStrerror (fileX->info.status.error_number),
+				 fileX->fileName);
+		deleteTagFileX (fileX);
+		exit (1);
+	}
+	return fileX;
+}
+
+static void run (struct actionSpec *actionSpec, struct inputSpec *inputSpec,
+				 readOptions *readOpts, tagPrintOptions *printOpts)
+{
+	if (actionSpec->sorter)
+		actionSpec->tagEntryArray = ptrArrayNew ((ptrArrayDeleteFunc)freeCopiedTag);
+
+	inputSpec->fileX = openTagsX (inputSpec);
+	if (actionSpec->action & ACTION_LIST_PTAGS)
+		listTags (inputSpec, true, printOpts, actionSpec);
+
+	if (actionSpec->action & ACTION_FIND)
+		findTag (inputSpec, actionSpec->name, readOpts, printOpts, actionSpec);
+	else if (actionSpec->action & ACTION_LIST)
+		listTags (inputSpec, false, printOpts, actionSpec);
+
+	if (actionSpec->tagEntryArray)
+	{
+		if (actionSpec->sorter)
+			ptrArraySortR (actionSpec->tagEntryArray, compareTagEntry, actionSpec->sorter);
+
+		const size_t entry_count = ptrArrayCount(actionSpec->tagEntryArray);
+		for (unsigned int i = 0; i < entry_count; i++)
+		{
+			tagEntry *e = ptrArrayItem (actionSpec->tagEntryArray, i);
+			actionSpec->walkerfn (e, actionSpec->dataForWalkerFn);
+		}
+		ptrArrayDelete (actionSpec->tagEntryArray);
+	}
+}
+
+static void initActionSpec (struct actionSpec *actionSpec)
+{
+	*actionSpec = (struct actionSpec) {
+		.action  = ACTION_NONE,
+		.name = NULL,
+		.canonicalizing = false,
+		.tagEntryArray = NULL,
+		.walkerfn = NULL,
+		.dataForWalkerFn = NULL,
+		.qualifier = NULL,
+		.sorter = NULL,
+		.formatter = NULL,
+	};
+}
+
+static void finiActionSpec (struct actionSpec *actionSpec)
+{
+	if (actionSpec->qualifier)
+		q_destroy (actionSpec->qualifier);
+	if (actionSpec->sorter)
+		s_destroy (actionSpec->sorter);
+	if (actionSpec->formatter)
+		f_destroy (actionSpec->formatter);
+}
+
+static void initCanonWorkArea (struct canonWorkArea *canon)
+{
+	canon->cacheTable = NULL;
+}
+
+static void initInputSpec (struct inputSpec *inputSpec)
+{
+	*inputSpec = (struct inputSpec) {
+		.tagFileName = "tags",
+		.tempFileName = NULL,
+		.fileX = NULL,
+	};
+	initCanonWorkArea (&inputSpec->canon);
+}
+
+static void finiInputSpec (struct inputSpec *inputSpec)
+{
+	if (inputSpec->fileX)
+		deleteTagFileX (inputSpec->fileX);
+
+	if (inputSpec->tempFileName)
+	{
+		remove (inputSpec->tempFileName);
+		eFree (inputSpec->tempFileName);
+	}
+
+	dropCanonFnameCacheTableMaybe (&inputSpec->canon);
+}
 
 static void printVersion(void)
 {
@@ -655,62 +723,32 @@ static void printVersion(void)
 	exit (0);
 }
 
-extern int main (int argc, char **argv)
+static void parseOptions (int argc, char **argv,
+						  struct actionSpec *actionSpec, struct inputSpec *inputSpec,
+						  readOptions *readOpts, tagPrintOptions *printOpts)
 {
-	int actionSupplied = 0;
-	int i;
-	int ignore_prefix = 0;
+	bool ignore_prefix = false;
 
-	tagPrintOptions printOpts;
-	readOptions readOpts;
-
-	memset (&printOpts, 0, sizeof (printOpts));
-	memset (&readOpts, 0, sizeof (readOpts));
-
-	struct canonWorkArea canonWorkArea = {
-		.cacheTable = NULL,
-		.ptags = 0,
-		.absoluteOnly = false,
-	};
-	struct canonWorkArea canonWorkAreaAbsForm = {
-		.cacheTable = NULL,
-		.ptags = 0,
-		.absoluteOnly = true,
-	};
-	struct canonWorkArea *canon = NULL;
-
-
-	ProgramName = argv [0];
-	setExecutableName (ProgramName);
-	if (argc == 1)
-		printUsage(stderr, 1);
-	for (i = 1  ;  i < argc  ;  ++i)
+	for (int i = 1  ;  i < argc  ;  ++i)
 	{
 		const char *const arg = argv [i];
 		if (ignore_prefix || arg [0] != '-')
 		{
-			if (canon)
-				canon->ptags = 0;
-			findTag (arg, &readOpts, &printOpts, canon);
-			actionSupplied = 1;
+			actionSpec->action |= ACTION_FIND;
+			actionSpec->name = arg;
 		}
 		else if (arg [0] == '-' && arg [1] == '\0')
-			ignore_prefix = 1;
+			ignore_prefix = true;
 		else if (arg [0] == '-' && arg [1] == '-')
 		{
 			const char *optname = arg + 2;
 			if (strcmp (optname, "debug") == 0)
 				debugMode++;
-			else if (strcmp (optname, "list-pseudo-tags") == 0)
-			{
-				if (canon)
-					canon->ptags = 1;
-				listTags (1, &printOpts, NULL);
-				actionSupplied = 1;
-			}
+			else if (strcmp (optname, "list-pseudo-tags") == 0
+					 || strcmp (optname, "with-pseudo-tags") == 0)
+				actionSpec->action |= ACTION_LIST_PTAGS;
 			else if (strcmp (optname, "help") == 0)
 				printUsage (stdout, 0);
-#ifdef READTAGS_DSL
 			else if (strcmp (optname, "help-expression") == 0)
 			{
 				if (i + 1 < argc)
@@ -737,30 +775,24 @@ extern int main (int argc, char **argv)
 					exit (1);
 				}
 			}
-#endif
 			else if (strcmp (optname, "version") == 0)
 				printVersion ();
 			else if (strcmp (optname, "escape-output") == 0)
-				printOpts.escaping = 1;
+				printOpts->escaping = true;
 			else if (strcmp (optname, "extension-fields") == 0)
-				printOpts.extensionFields = 1;
+				printOpts->extensionFields = true;
 			else if (strcmp (optname, "icase-match") == 0)
-				readOpts.matchOpts |= TAG_IGNORECASE;
+				readOpts->matchOpts |= TAG_IGNORECASE;
 			else if (strcmp (optname, "prefix-match") == 0)
-				readOpts.matchOpts |= TAG_PARTIALMATCH;
+				readOpts->matchOpts |= TAG_PARTIALMATCH;
 			else if (strcmp (optname, "list") == 0)
-			{
-				if (canon)
-					canon->ptags = 0;
-				listTags (0, &printOpts, canon);
-				actionSupplied = 1;
-			}
+				actionSpec->action |= ACTION_LIST;
 			else if (strcmp (optname, "line-number") == 0)
-				printOpts.lineNumber = 1;
+				printOpts->lineNumber = true;
 			else if (strcmp (optname, "tag-file") == 0)
 			{
 				if (i + 1 < argc)
-					TagFileName = argv [++i];
+					inputSpec->tagFileName = argv [++i];
 				else
 					printUsage (stderr, 1);
 			}
@@ -771,13 +803,13 @@ extern int main (int argc, char **argv)
 					const char *sort_spec = argv [++i];
 					if (strcmp (sort_spec, "0") == 0
 						|| strcmp (sort_spec, "unsorted") == 0)
-						readOpts.sortMethod = 0;
+						readOpts->sortMethod = TAG_UNSORTED;
 					else if (strcmp (sort_spec, "1") == 0
 							 || strcmp (sort_spec, "sorted") == 0)
-						readOpts.sortMethod = 1;
+						readOpts->sortMethod = TAG_SORTED;
 					else if (strcmp (sort_spec, "2") == 0
 							 || strcmp (sort_spec, "foldcase") == 0)
-						readOpts.sortMethod = 2;
+						readOpts->sortMethod = TAG_FOLDSORTED;
 					else
 					{
 						fprintf (stderr, "%s: unknown sort method for --%s option\n",
@@ -793,16 +825,21 @@ extern int main (int argc, char **argv)
 				}
 			}
 			else if (strcmp (optname, "absolute-input") == 0)
-				canon = &canonWorkAreaAbsForm;
+			{
+				actionSpec->canonicalizing = true;
+				actionSpec->absoluteOnly = true;
+			}
 			else if (strcmp (optname, "canonicalize-input") == 0)
-				canon = &canonWorkArea;
-#ifdef READTAGS_DSL
+			{
+				actionSpec->canonicalizing = true;
+				actionSpec->absoluteOnly = false;
+			}
 			else if (strcmp (optname, "filter") == 0)
 			{
 				if (i + 1 < argc)
-					Qualifier = compileExpression (argv[++i],
-												   (void * (*)(EsObject *))q_compile,
-												   optname);
+					actionSpec->qualifier = compileExpression (argv[++i],
+															   (void * (*)(EsObject *))q_compile,
+															   optname);
 				else
 				{
 					fprintf (stderr, "%s: missing filter expression for --%s option\n",
@@ -813,9 +850,9 @@ extern int main (int argc, char **argv)
 			else if (strcmp (optname, "sorter") == 0)
 			{
 				if (i + 1 < argc)
-					Sorter = compileExpression (argv[++i],
-												(void * (*)(EsObject *))s_compile,
-												optname);
+					actionSpec->sorter = compileExpression (argv[++i],
+															(void * (*)(EsObject *))s_compile,
+															optname);
 				else
 				{
 					fprintf (stderr, "%s: missing sorter expression for --%s option\n",
@@ -826,9 +863,9 @@ extern int main (int argc, char **argv)
 			else if (strcmp (optname, "formatter") == 0)
 			{
 				if (i + 1 < argc)
-					Formatter = compileExpression (argv[++i],
-												   (void * (*)(EsObject *))f_compile,
-												   optname);
+					actionSpec->formatter = compileExpression (argv[++i],
+															   (void * (*)(EsObject *))f_compile,
+															   optname);
 				else
 				{
 					fprintf (stderr, "%s: missing formatter expression for --%s option\n",
@@ -836,7 +873,6 @@ extern int main (int argc, char **argv)
 					exit (1);
 				}
 			}
-#endif
 			else
 			{
 				fprintf (stderr, "%s: unknown long options: --%s\n",
@@ -852,122 +888,134 @@ extern int main (int argc, char **argv)
 			{
 				switch (arg [j])
 				{
-					case 'd': debugMode++; break;
-					case 'D':
-						if (canon)
-							canon->ptags = 1;
-						listTags (1, &printOpts, canon);
-						actionSupplied = 1;
-						break;
-					case 'h': printUsage (stdout, 0); break;
-#ifdef READTAGS_DSL
-					case 'H':
-						if (i + 1 < argc)
-						{
-							const char *exp_klass = argv [++i];
-							if (strcmp (exp_klass, "filter") == 0)
-								printFilterExpression (stdout, 0);
-							else if (strcmp (exp_klass, "sorter") == 0)
-								printSorterExpression (stdout, 0);
-							else if (strcmp (exp_klass, "formatter") == 0)
-								printFormatterExpression (stdout, 0);
-							else
-								printUsage(stderr, 1);
-						}
+				case 'd': debugMode++; break;
+				case 'D':
+				case 'P':
+					actionSpec->action |= ACTION_LIST_PTAGS;
+					break;
+				case 'h': printUsage (stdout, 0); break;
+				case 'H':
+					if (i + 1 < argc)
+					{
+						const char *exp_klass = argv [++i];
+						if (strcmp (exp_klass, "filter") == 0)
+							printFilterExpression (stdout, 0);
+						else if (strcmp (exp_klass, "sorter") == 0)
+							printSorterExpression (stdout, 0);
+						else if (strcmp (exp_klass, "formatter") == 0)
+							printFormatterExpression (stdout, 0);
 						else
 							printUsage(stderr, 1);
-#endif
-					case 'v': printVersion ();
-					case 'E': printOpts.escaping = 1; break;
-					case 'e': printOpts.extensionFields = 1; break;
-					case 'i': readOpts.matchOpts |= TAG_IGNORECASE;   break;
-					case 'p': readOpts.matchOpts |= TAG_PARTIALMATCH; break;
-					case 'l':
-						if (canon)
-							canon->ptags = 0;
-						listTags (0, &printOpts, canon);
-						actionSupplied = 1;
-						break;
-					case 'n': printOpts.lineNumber = 1; break;
-					case 't':
-						if (arg [j+1] != '\0')
-						{
-							TagFileName = arg + j + 1;
-							j += strlen (TagFileName);
-						}
-						else if (i + 1 < argc)
-							TagFileName = argv [++i];
-						else
-							printUsage(stderr, 1);
-						break;
-					case 's':
-						readOpts.sortOverride = 1;
-						++j;
-						if (arg [j] == '\0')
-							readOpts.sortMethod = TAG_SORTED;
-						else if (strchr ("012", arg[j]) != NULL)
-							readOpts.sortMethod = (sortType) (arg[j] - '0');
-						else
-							printUsage(stderr, 1);
-						break;
-					case 'A':
-						canon = &canonWorkAreaAbsForm;
-						break;
-					case 'C':
-						canon = &canonWorkArea;
-						break;
-#ifdef READTAGS_DSL
-					case 'Q':
-						if (i + 1 == argc)
-							printUsage(stderr, 1);
-						Qualifier = compileExpression (argv[++i],
-													   (void * (*)(EsObject *))q_compile,
-													   "filter");
-						break;
-					case 'S':
-						if (i + 1 == argc)
-							printUsage(stderr, 1);
-						Sorter = compileExpression (argv[++i],
-													   (void * (*)(EsObject *))s_compile,
-													   "sorter");
-						break;
-					case 'F':
-						if (i + 1 == argc)
-							printUsage(stderr, 1);
-						Formatter = compileExpression (argv[++i],
-													   (void * (*)(EsObject *))f_compile,
-													   "formatter");
-						break;
-#endif
-					default:
-						fprintf (stderr, "%s: unknown option: %c\n",
-									ProgramName, arg[j]);
-						exit (1);
-						break;
+					}
+					else
+						printUsage(stderr, 1);
+				case 'v': printVersion ();
+				case 'E': printOpts->escaping = true; break;
+				case 'e': printOpts->extensionFields = true; break;
+				case 'i': readOpts->matchOpts |= TAG_IGNORECASE;   break;
+				case 'p': readOpts->matchOpts |= TAG_PARTIALMATCH; break;
+				case 'l':
+					actionSpec->action |= ACTION_LIST;
+					break;
+				case 'n': printOpts->lineNumber = true; break;
+				case 't':
+					if (arg [j+1] != '\0')
+					{
+						inputSpec->tagFileName = arg + j + 1;
+						j += strlen (inputSpec->tagFileName);
+					}
+					else if (i + 1 < argc)
+						inputSpec->tagFileName = argv [++i];
+					else
+						printUsage(stderr, 1);
+					break;
+				case 's':
+					readOpts->sortOverride = true;
+					++j;
+					if (arg [j] == '\0')
+						readOpts->sortMethod = TAG_SORTED;
+					else if (strchr ("012", arg[j]) != NULL)
+						readOpts->sortMethod = (sortType) (arg[j] - '0');
+					else
+						printUsage(stderr, 1);
+					break;
+				case 'A':
+					actionSpec->canonicalizing = true;
+					actionSpec->absoluteOnly = true;
+					break;
+				case 'C':
+					actionSpec->canonicalizing = true;
+					actionSpec->absoluteOnly = false;
+					break;
+				case 'Q':
+					if (i + 1 == argc)
+						printUsage(stderr, 1);
+					actionSpec->qualifier = compileExpression (argv[++i],
+															   (void * (*)(EsObject *))q_compile,
+															   "filter");
+					break;
+				case 'S':
+					if (i + 1 == argc)
+						printUsage(stderr, 1);
+					actionSpec->sorter = compileExpression (argv[++i],
+															(void * (*)(EsObject *))s_compile,
+															"sorter");
+					break;
+				case 'F':
+					if (i + 1 == argc)
+						printUsage(stderr, 1);
+					actionSpec->formatter = compileExpression (argv[++i],
+															   (void * (*)(EsObject *))f_compile,
+															   "formatter");
+					break;
+				default:
+					fprintf (stderr, "%s: unknown option: %c\n",
+							 ProgramName, arg[j]);
+					exit (1);
+					break;
 				}
 			}
 		}
 	}
-	if (! actionSupplied)
+}
+
+extern int main (int argc, char **argv)
+{
+	tagPrintOptions printOpts = {0};
+	readOptions readOpts = {0};
+	struct inputSpec inputSpec;
+	struct actionSpec actionSpec;
+
+	initActionSpec (&actionSpec);
+	initInputSpec (&inputSpec);
+
+	ProgramName = argv [0];
+	setExecutableName (ProgramName);
+	if (argc == 1)
+		printUsage(stderr, 1);
+
+	parseOptions (argc, argv, &actionSpec, &inputSpec, &readOpts, &printOpts);
+
+	if (actionSpec.action == ACTION_NONE)
 	{
 		fprintf (stderr,
 			"%s: no action specified: specify one of NAME, -l or -D\n",
 			ProgramName);
 		exit (1);
 	}
-#ifdef READTAGS_DSL
-	if (Qualifier)
-		q_destroy (Qualifier);
-	if (Sorter)
-		s_destroy (Sorter);
-	if (Formatter)
-		f_destroy (Formatter);
-#endif
 
-	if (canon)
+	if ((actionSpec.action & ACTION_FIND) && (actionSpec.action & ACTION_LIST))
 	{
-		if (canon->cacheTable)
-			canonFnameCacheTableDelete (canon->cacheTable);
+		fprintf (stderr,
+				 "%s: choose either an action: finding a tag or listing all\n",
+				 ProgramName);
+		exit (1);
 	}
+
+	run (&actionSpec, &inputSpec, &readOpts, &printOpts);
+
+	finiActionSpec(&actionSpec);
+	finiInputSpec(&inputSpec);
+
 	return 0;
 }

@@ -15,7 +15,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "make.h"
+#include "x-make.h"
 
 #include "entry.h"
 #include "htable.h"
@@ -343,7 +343,7 @@ static void directiveCallback (makeSubparser *make CTAGS_ATTR_UNUSED, char *dire
 }
 
 static void newMacroCallback (makeSubparser *make, char* name, bool with_define_directive,
-							  bool appending)
+							  bool appending, int scopeIndex CTAGS_ATTR_UNUSED)
 {
 	struct sAutomakeSubparser *automake = (struct sAutomakeSubparser *)make;
 
@@ -419,6 +419,8 @@ extern parserDefinition* AutomakeParser (void)
 {
 	static const char *const extensions [] = { "am", NULL };
 	static const char *const patterns [] = { "Makefile.am", "GNUmakefile.am", NULL };
+	static const char *const aliases [] = { "makefile-automake", NULL };
+
 	static struct sAutomakeSubparser automakeSubparser = {
 		.make = {
 			.subparser = {
@@ -444,6 +446,7 @@ extern parserDefinition* AutomakeParser (void)
 	def->kindCount  = ARRAY_SIZE (AutomakeKinds);
 	def->extensions = extensions;
 	def->patterns   = patterns;
+	def->aliases    = aliases;
 	def->parser     = findAutomakeTags;
 	def->xtagTable = AutomakeXtagTable;
 	def->xtagCount = ARRAY_SIZE (AutomakeXtagTable);

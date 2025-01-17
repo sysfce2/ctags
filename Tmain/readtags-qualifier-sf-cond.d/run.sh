@@ -10,13 +10,7 @@ READTAGS=$3
 #V="valgrind --leak-check=full -v"
 V=
 
-if ! [ -x "${READTAGS}" ]; then
-    skip "no readtags"
-fi
-
-if ! ( "${READTAGS}" -h | grep -q -e -S ); then
-    skip "no qualifier function in readtags"
-fi
+skip_if_no_readtags "$READTAGS"
 
 ${V} ${READTAGS} -e -t output.tags \
 	 -Q '(cond ((eq? $kind "m") (#/.h./ $name)) ((eq? $kind "t")) ((#/.n./ $name) #f) (#t))' \

@@ -26,16 +26,19 @@
 
 #include "entry.h"
 #include "htable.h"
-#include "iniconf.h"
+#include "x-iniconf.h"
 #include "parse.h"
 #include "read.h"
 #include "subparser.h"
 #include "vstring.h"
 
+#define TOML_QUOTED_KEY_CHAR(c) ( (c) == '"' || (c) == '\'' )
+
 static bool isIdentifier (int c)
 {
-    /* allow whitespace within keys and sections */
-    return (bool)(isalnum (c) || isspace (c) ||  c == '_');
+	/* allow whitespace within keys and sections */
+	return (bool)(isalnum (c) || isspace (c) || c == '_' || c == '-' || c == '.'
+		|| TOML_QUOTED_KEY_CHAR(c));
 }
 
 static bool isValue (int c)
@@ -96,9 +99,7 @@ static void makeIniconfTagMaybe (const char *section, const char *key, const cha
 	}
 	else
 	{
-		tagEntryInfo *last = getEntryInCorkQueue (*index);
-		if (last)
-			last->extensionFields.endLine = getInputLineNumber ();
+		setTagEndLineToCorkEntry (*index, getInputLineNumber ());
 
 		initTagEntry (&e, section, K_SECTION);
 		*index = makeTagEntry (&e);
@@ -132,7 +133,8 @@ static void findIniconfTags (void)
 		if (*cp == '[')
 		{
 			++cp;
-			while (*cp != '\0' && *cp != ']')
+			/* look for the final ] to support TOML [[arrays.of.tables]] */
+			while (*cp != '\0' && (*cp != ']' || *(cp+1) == ']'))
 			{
 				vStringPut (name, *cp);
 				++cp;

@@ -5,10 +5,12 @@ Autoconf             M4         base <> sub {bidirectional}
 Automake             Make       base <= sub {dedicated}
 Bats                 Sh         base <= sub {dedicated}
 BibLaTeX             BibTeX     base <> sub {bidirectional}
+Cargo                TOML       base <= sub {dedicated}
 DBusIntrospect       XML        base <> sub {bidirectional}
 FunctionParameters   Perl       base <> sub {bidirectional}
 GemSpec              Ruby       base <= sub {dedicated}
 Glade                XML        base <> sub {bidirectional}
+I18nRubyGem          Yaml       base <> sub {bidirectional}
 IPythonCell          Python     base => sub {shared}
 ITcl                 Tcl        base <> sub {bidirectional}
 Maven2               XML        base <> sub {bidirectional}
@@ -24,9 +26,11 @@ RSpec                Ruby       base => sub {shared}
 Rake                 Ruby       base <= sub {dedicated}
 RelaxNG              XML        base <> sub {bidirectional}
 S4Class              R          base <> sub {bidirectional}
+SELinuxInterface     M4         base <= sub {dedicated}
 SVG                  XML        base <> sub {bidirectional}
 SystemdUnit          Iniconf    base <= sub {dedicated}
 TclOO                Tcl        base <> sub {bidirectional}
 TeXBeamer            Tex        base <> sub {bidirectional}
+XRC                  XML        base <= sub {dedicated}
 XSLT                 XML        base <> sub {bidirectional}
 YumRepo              Iniconf    base <= sub {dedicated}

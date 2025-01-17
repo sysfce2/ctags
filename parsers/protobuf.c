@@ -50,7 +50,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "cpreprocessor.h"
+#include "x-cpreprocessor.h"
 
 #include "entry.h"
 #include "keyword.h"
@@ -206,7 +206,7 @@ repeat:
 		token.keyword = lookupCaseKeyword (vStringValue (token.value), Lang_protobuf);
 		cppUngetc (c);
 	}
-	else if (expectingStringLiteral && c == STRING_SYMBOL)
+	else if (expectingStringLiteral && c == CPP_STRING_SYMBOL)
 	{
 		token.type = TOKEN_STR;
 		vStringCopy (token.value,
@@ -297,9 +297,7 @@ static void parseEnumConstants (int scopeCorkIndex)
 		if (token.type == ';')
 			nextToken ();
 	}
-	tagEntryInfo *e = getEntryInCorkQueue (scopeCorkIndex);
-	if (e)
-		e->extensionFields.endLine = getInputLineNumber ();
+	setTagEndLineToCorkEntry (scopeCorkIndex, getInputLineNumber ());
 }
 
 static void parseOneofField (int scopeCorkIndex)
@@ -347,9 +345,7 @@ static void parseOneofFields (int scopeCorkIndex)
 			break;
 	}
 
-	tagEntryInfo *e = getEntryInCorkQueue (scopeCorkIndex);
-	if (e)
-		e->extensionFields.endLine = getInputLineNumber ();
+	setTagEndLineToCorkEntry (scopeCorkIndex, getInputLineNumber ());
 }
 
 #define gatherTypeinfo(VSTRING,CONDITION)			\
@@ -642,7 +638,7 @@ static void findProtobufTags0 (bool oneshot, int originalScopeCorkIndex)
 			if (e)
 			{
 				scopeCorkIndex = e->extensionFields.scopeIndex;
-				e->extensionFields.endLine = getInputLineNumber ();
+				setTagEndLine (e, getInputLineNumber ());
 			}
 		}
 		nextToken ();

@@ -6,7 +6,7 @@ readtags
 
 Find tag file entries matching specified names
 
-:Version: 6.0.0
+:Version: 6.1.0
 :Manual group: Universal Ctags
 :Manual section: 1
 
@@ -35,7 +35,7 @@ ACTIONS
 	"-" as NAME indicates arguments after this as NAME even if they start with -.
 
 ``-D``, ``--list-pseudo-tags``
-	Equivalent to ``--list-pseudo-tags``.
+	List pseudo tags.
 
 OPTIONS
 -------
@@ -48,7 +48,7 @@ The behavior of reading tags can be controlled using these options:
 	Use specified tag file (default: "tags").
 	Giving "-" as TAGFILE indicates reading the tags file content from the
 	standard input. "-" can make the command line simpler. However,
-	it doesn't mean efficient; readtags stores the data to a temorary
+	it doesn't mean efficient; readtags stores the data to a temporary
 	file and reads that file for taking the ACTION.
 
 ``-s[0|1|2]``, ``--override-sort-detection METHOD``
@@ -97,6 +97,9 @@ field. The Output can be tweaked using these options:
 
 ``-n``, ``--line-number``
 	Also include the line number field when ``-e`` option is give.
+
+``-P``, ``--with-pseudo-tags``
+	List pseudo tags as if ``-D`` option is specified but continues processing without exiting.
 
 About the ``-E`` option: certain characters are escaped in a tags file, to make
 it machine-readable. e.g., ensuring no tabs character appear in fields other
@@ -395,7 +398,7 @@ as input for readtags:
    foo	input.c	6;"	f	typeref:typename:int	file:	signature:(int v)
    main	input.c	16;"	f	typeref:typename:int	signature:(int argc,char ** argv)
 
-An exapmle for printing only function names:
+An example for printing only function names:
 
 .. code-block:: console
 
@@ -471,5 +474,5 @@ Darren Hiebert <dhiebert@users.sourceforge.net>
 http://DarrenHiebert.com/
 
 The readtags command and libreadtags maintained at Universal Ctags
-are derived from readtags.c and readtags.h developd at
+are derived from readtags.c and readtags.h developed at
 http://ctags.sourceforge.net.
