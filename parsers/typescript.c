@@ -144,6 +144,7 @@ typedef enum eTokenType {
 	TOKEN_AT,
 	TOKEN_MINUS,
 	TOKEN_PLUS,
+	TOKEN_BANG,
 	TOKEN_DIV,
 	TOKEN_POWER,
 	TOKEN_GREATER,
@@ -1170,12 +1171,12 @@ static void parseEnum (const int scope, tokenInfo *const token)
 	parseEnumBody (nscope, token);
 }
 
-MULTI_CHAR_PARSER_DEF (VariableChars, "|&=?[]{}()\n:;,.-+/^<>*",
+MULTI_CHAR_PARSER_DEF (VariableChars, "|&=?[]{}()\n:;,.-+/^<>*!",
 		TOKEN_PIPE, TOKEN_AMPERSAND, TOKEN_EQUAL_SIGN, TOKEN_QUESTION_MARK,
 		TOKEN_OPEN_SQUARE, TOKEN_CLOSE_SQUARE, TOKEN_OPEN_CURLY, TOKEN_CLOSE_CURLY,
 		TOKEN_OPEN_PAREN, TOKEN_CLOSE_PAREN, TOKEN_NL, TOKEN_COLON, TOKEN_SEMICOLON,
 		TOKEN_COMMA, TOKEN_PERIOD, TOKEN_MINUS, TOKEN_PLUS,
-		TOKEN_DIV, TOKEN_POWER, TOKEN_LOWER, TOKEN_GREATER, TOKEN_STAR)
+		TOKEN_DIV, TOKEN_POWER, TOKEN_LOWER, TOKEN_GREATER, TOKEN_STAR, TOKEN_BANG)
 static void parseVariable (bool constVar, bool localVar, const int scope, tokenInfo *const token)
 {
 	tokenInfo *member = NULL;
@@ -1249,6 +1250,7 @@ static void parseVariable (bool constVar, bool localVar, const int scope, tokenI
 						nestLevel = 0;
 					}
 					break;
+				case TOKEN_BANG:
 				case TOKEN_STAR:
 				case TOKEN_MINUS:
 				case TOKEN_PLUS:
